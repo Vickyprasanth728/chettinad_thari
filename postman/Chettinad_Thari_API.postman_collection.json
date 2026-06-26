@@ -1,0 +1,5121 @@
+{
+  "info": {
+    "name": "Chettinad Thari API",
+    "description": "Complete API collection for Chettinad Thari POS & Inventory Management.\n\n## Getting Started\n1. Import the **Chettinad Thari — Local** environment.\n2. Run **Auth → Sign In** (auto-saves `token`, `refreshToken`, `userId`).\n3. Use other folders — all protected routes use `Authorization: Bearer {{token}}`.\n\n## Folder Structure\n- **Auth** — Login, refresh, logout, session\n- **Users / Roles / Permissions / Sidebar** — Access control\n- **Dashboard** — Summary widgets & charts\n- **Reports / GST Reports** — Admin & tax reports\n- **Categories / Masters / GST** — Master data\n- **Products / Vendors** — Inventory & procurement\n- **POS App / POS Billing** — Point of sale\n- **Settings** — Receipt templates\n\nBase URL: `{{baseUrl}}`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    },
+    {
+      "key": "roleId",
+      "value": "1"
+    },
+    {
+      "key": "permissionId",
+      "value": "1"
+    },
+    {
+      "key": "sidebarId",
+      "value": "1"
+    },
+    {
+      "key": "categoryId",
+      "value": "1"
+    },
+    {
+      "key": "productId",
+      "value": "1"
+    },
+    {
+      "key": "vendorId",
+      "value": "1"
+    },
+    {
+      "key": "billId",
+      "value": "1"
+    },
+    {
+      "key": "customerId",
+      "value": "1"
+    },
+    {
+      "key": "gstId",
+      "value": "1"
+    },
+    {
+      "key": "designId",
+      "value": "1"
+    },
+    {
+      "key": "gmasterId",
+      "value": "1"
+    },
+    {
+      "key": "orderId",
+      "value": "1"
+    },
+    {
+      "key": "paymentId",
+      "value": "1"
+    },
+    {
+      "key": "returnId",
+      "value": "1"
+    },
+    {
+      "key": "stockNo",
+      "value": "STK001"
+    },
+    {
+      "key": "billNo",
+      "value": "BILL-20260602-0001"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Sign In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/signin",
+            "description": "Login with username & password. Saves token automatically.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.status && j.data) {",
+                  "    if (j.data.accessToken) pm.collectionVariables.set(\"token\", j.data.accessToken);",
+                  "    if (j.data.refreshToken) pm.collectionVariables.set(\"refreshToken\", j.data.refreshToken);",
+                  "    if (j.data.user?.id) pm.collectionVariables.set(\"userId\", j.data.user.id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh-token",
+            "description": "Refresh expired access token using refresh token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"userid\": {{userId}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Sign Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/signout",
+            "description": "Revoke refresh token and log out."
+          }
+        },
+        {
+          "name": "Me (Current Session)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Get current user, permissions, and sidebar menu."
+          }
+        }
+      ],
+      "description": "Run **Sign In** first. Token is saved to collection variable `token`."
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=20&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Paginated user list. Use `?id=` for single user."
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?id={{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Staff List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/staff-list",
+            "description": "Billing staff + admin users (no permission check)."
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"staff01\",\n  \"password\": \"staff123\",\n  \"name\": \"Staff One\",\n  \"email\": \"staff01@test.com\",\n  \"mobileno\": \"9000000001\",\n  \"role_id\": 2,\n  \"status\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"userId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Staff One Updated\",\n  \"status\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Check Username Unique",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/username-unique",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"exclude_id\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Check Mobile Unique",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/mobile-unique",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileno\": \"9000000001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check Email Unique",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/email-unique",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"staff01@test.com\"\n}"
+            }
+          }
+        }
+      ],
+      "description": "User management. Permission: `user:create`, `user:read`, `user:update`, `user:delete`."
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles?page=1&limit=20&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Role by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/roles?id={{roleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{roleId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/roles",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Role\",\n  \"status\": 1,\n  \"permissions\": [\n    1,\n    2,\n    3\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"roleId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/roles/{{roleId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Role Updated\",\n  \"permissions\": [\n    1,\n    2\n  ],\n  \"status\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/roles/{{roleId}}"
+          }
+        }
+      ],
+      "description": "Role management with permission assignment. Permission: `roles:*`."
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions?page=1&limit=50&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Permission by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/permissions?id={{permissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{permissionId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/permissions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"test:action\",\n  \"status\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"permissionId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/permissions/{{permissionId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"test:action_updated\",\n  \"status\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Permission",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/permissions/{{permissionId}}"
+          }
+        }
+      ],
+      "description": "Permission definitions. Permission: `permissions:*`."
+    },
+    {
+      "name": "Sidebar",
+      "item": [
+        {
+          "name": "List Sidebar Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sidebar?page=1&limit=50&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sidebar"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sidebar Item by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sidebar?id={{sidebarId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sidebar"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{sidebarId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Sidebar Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/sidebar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Menu\",\n  \"icon\": \"star\",\n  \"path\": \"/test\",\n  \"permission\": 1,\n  \"parent_permission\": null,\n  \"status\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"sidebarId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Sidebar Item",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/sidebar/{{sidebarId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Menu Updated\",\n  \"icon\": \"star\",\n  \"path\": \"/test-updated\",\n  \"status\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Sidebar Item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/sidebar/{{sidebarId}}"
+          }
+        }
+      ],
+      "description": "Navigation menu configuration. Permission: `sidebar:*`."
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/dashboard/summary",
+            "description": "Sales totals, low stock count, vendor pending, top sellers."
+          }
+        },
+        {
+          "name": "Low Stock Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/low-stock?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "low-stock"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sales Chart (Daily)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/sales-chart?period=daily&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "sales-chart"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "daily"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sales Chart (Monthly)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/sales-chart?period=monthly&from=2026-01-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "sales-chart"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "monthly"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Dashboard widgets. Permission: `dashboard:read`."
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Sales & Billing",
+          "item": [
+            {
+              "name": "In-Depth Report (JSON)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/in-depth?format=json&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "in-depth"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "json"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "In-Depth Report (Excel)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/in-depth?format=excel&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "in-depth"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "excel"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Bill Details (JSON)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/bill-details?format=json&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "bill-details"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "json"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Bill Details (Excel)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/bill-details?format=excel&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "bill-details"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "excel"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Cancelled Bills (JSON)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/cancelled-bills?format=json&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "cancelled-bills"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "json"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Cancelled Bills (Excel)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/cancelled-bills?format=excel&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "cancelled-bills"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "excel"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Vendor",
+          "item": [
+            {
+              "name": "Vendor Report (JSON)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/vendor?format=json&from=2026-06-01&to=2026-06-30&pending_only=false",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "vendor"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "json"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    },
+                    {
+                      "key": "pending_only",
+                      "value": "false"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Vendor Report (Excel)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/reports/vendor?format=excel&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "vendor"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "excel"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filters",
+          "item": [
+            {
+              "name": "Filter — Vendors",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/filters/vendors"
+              }
+            },
+            {
+              "name": "Filter — Products",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/filters/products"
+              }
+            },
+            {
+              "name": "Filter — Staff",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/filters/staff"
+              }
+            },
+            {
+              "name": "Filter — Payment Types",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/filters/payment-types"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Admin reports. Permission: `report:read`. Export via `format=excel|pdf`."
+    },
+    {
+      "name": "GST Reports",
+      "item": [
+        {
+          "name": "GST Summary (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/summary?format=json&from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "all"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Summary (Excel)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/summary?format=excel&from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "excel"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "all"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Summary (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/summary?format=csv&from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=b2b",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "b2b"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Detailed (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/detailed?format=json&from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "detailed"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "all"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Detailed (PDF)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/detailed?format=pdf&from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "detailed"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "pdf"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "all"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Reconciliation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/reconciliation?from=2026-06-01&to=2026-06-30&voucher_type=sale&gst_type=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "reconciliation"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                },
+                {
+                  "key": "voucher_type",
+                  "value": "sale"
+                },
+                {
+                  "key": "gst_type",
+                  "value": "all"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Sales (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/sales?format=json&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Sales (Excel)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/sales?format=excel&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "excel"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Purchase (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/purchase?format=json&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "purchase"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GST Purchase (Excel)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/purchase?format=excel&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "purchase"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "excel"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "HSN Summary (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/hsn-summary?format=json&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "hsn-summary"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "HSN Summary (Excel)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/hsn-summary?format=excel&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "hsn-summary"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "excel"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Combined Export (Excel)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst-reports/combined?format=excel&from=2026-06-01&to=2026-06-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst-reports",
+                "combined"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "excel"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-06-30"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "GST/tax reports. Permission: `gst_report:read`, `gst_report:export`."
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories?page=1&limit=50&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Categories (Tree)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories?tree=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "tree",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Category by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories?id={{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Category Dropdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/categories/dropdown"
+          }
+        },
+        {
+          "name": "Check Unique Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/categories/check-unique-name",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarees\",\n  \"parent_id\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Category\",\n  \"parent_id\": null,\n  \"status\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"categoryId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/categories/{{categoryId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Category Updated\",\n  \"status\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/categories/{{categoryId}}"
+          }
+        }
+      ],
+      "description": "Product category hierarchy. Permission: `category:*`."
+    },
+    {
+      "name": "GST",
+      "item": [
+        {
+          "name": "List GST Slabs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst?page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get GST by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/gst?id={{gstId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gst"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{gstId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create GST Slab",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/gst",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"GST 5%\",\n  \"tax\": 5,\n  \"type\": \"inclusive\",\n  \"status\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  const id = j.data.id;",
+                  "  if (id) pm.collectionVariables.set(\"gstId\", id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update GST Slab",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/gst/{{gstId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"GST 5% Updated\",\n  \"tax\": 5,\n  \"type\": \"exclusive\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete GST Slab",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/gst/{{gstId}}"
+          }
+        }
+      ],
+      "description": "GST tax slab master. Permission: `gst:*`."
+    },
+    {
+      "name": "Masters",
+      "item": [
+        {
+          "name": "gmaster",
+          "item": [
+            {
+              "name": "List gmaster",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/gmaster?page=1&limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "gmaster"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get gmaster by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/gmaster?id={{gmasterId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "gmaster"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{gmasterId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create gmaster",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmaster",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Product Category\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"gmasterId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update gmaster",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmaster/{{gmasterId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Category Updated\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete gmaster",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmaster/{{gmasterId}}"
+              }
+            },
+            {
+              "name": "Check Unique Field",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmaster/check-unique",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"field\": \"name\",\n  \"value\": \"test-value\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "gmastervalue",
+          "item": [
+            {
+              "name": "List gmastervalue",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/gmastervalue?gmaster_id={{gmasterId}}&page=1&limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "gmastervalue"
+                  ],
+                  "query": [
+                    {
+                      "key": "gmaster_id",
+                      "value": "{{gmasterId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create gmastervalue",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmastervalue",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"gmaster_id\": \"{{gmasterId}}\",\n  \"name\": \"Silk\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Update gmastervalue",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmastervalue/1",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"gmaster_id\": \"{{gmasterId}}\",\n  \"name\": \"Pure Silk\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete gmastervalue",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/gmastervalue/1"
+              }
+            }
+          ]
+        },
+        {
+          "name": "design_master",
+          "item": [
+            {
+              "name": "List design_master",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/design_master?page=1&limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "design_master"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create design_master",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/design_master",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"design_code\": \"DES-001\",\n  \"design_details\": \"Chettinad pattern\",\n  \"status\": 1\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"designId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update design_master",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/design_master/{{designId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"design_details\": \"Updated pattern\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete design_master",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/design_master/{{designId}}"
+              }
+            },
+            {
+              "name": "Check Design Code Unique",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/design/check-unique-code",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"design_code\": \"DES-001\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "size",
+          "item": [
+            {
+              "name": "List size",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/size?page=1&limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "size"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get size by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/size?id={{sizeId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "size"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{sizeId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create size",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/size",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Free Size\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"sizeId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update size",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/size/{{sizeId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Free Size Updated\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete size",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/size/{{sizeId}}"
+              }
+            },
+            {
+              "name": "Check Unique Field",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/size/check-unique",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"field\": \"name\",\n  \"value\": \"test-value\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "color",
+          "item": [
+            {
+              "name": "List color",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/color?page=1&limit=50",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "color"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "50"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get color by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/color?id={{colorId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "color"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{colorId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create color",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/color",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Red\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"colorId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update color",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/color/{{colorId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Maroon\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete color",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/color/{{colorId}}"
+              }
+            },
+            {
+              "name": "Check Unique Field",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/color/check-unique",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"field\": \"name\",\n  \"value\": \"test-value\"\n}"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Generic master CRUD. Permission: `master:*`."
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "CRUD",
+          "item": [
+            {
+              "name": "List Products",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products?page=1&limit=20&search=&low_stock=false",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    },
+                    {
+                      "key": "low_stock",
+                      "value": "false"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Products (Low Stock)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products?low_stock=true&page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ],
+                  "query": [
+                    {
+                      "key": "low_stock",
+                      "value": "true"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Product by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products?id={{productId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{productId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Product Stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/stats"
+              }
+            },
+            {
+              "name": "Check Product Name Unique",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/check-unique-name",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_name\": \"Postman Test Product\",\n  \"exclude_id\": null\n}"
+                }
+              }
+            },
+            {
+              "name": "Create Product",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"stock_no\": \"STK-POSTMAN-001\",\n  \"product_name\": \"Postman Test Product\",\n  \"description\": \"Created via Postman\",\n  \"quantity\": 10,\n  \"retail_price\": 1500,\n  \"discount\": 0,\n  \"gst_id\": 1,\n  \"hsn_code\": \"5007\",\n  \"published\": 1\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"productId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Product",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_name\": \"Postman Test Product Updated\",\n  \"retail_price\": 1600\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Product",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inventory",
+          "item": [
+            {
+              "name": "Adjust Stock (Increase)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"increase\",\n  \"quantity\": 5,\n  \"reason\": \"Postman test\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Adjust Stock (Decrease)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}/adjust-stock",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"decrease\",\n  \"quantity\": 2,\n  \"reason\": \"Postman test\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Inventory Logs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/inventory-logs?id={{productId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    "inventory-logs"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{productId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Check Quantity",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/check-quantity",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"{{productId}}\",\n  \"quantity\": 1\n}"
+                }
+              }
+            },
+            {
+              "name": "Check Status (Public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/checkstatus",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"products\": [\n    {\n      \"id\": \"{{productId}}\"\n    }\n  ]\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lookup & QR",
+          "item": [
+            {
+              "name": "Get by Stock No",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/by-stock/{{stockNo}}"
+              }
+            },
+            {
+              "name": "QR Scan",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/qr-scan",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"stock_no\": \"{{stockNo}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "QR Tag",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/qr-tag?id={{productId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    "qr-tag"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{productId}}"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "POS Catalog",
+          "item": [
+            {
+              "name": "POS Catalog",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/pos-catalog"
+              }
+            },
+            {
+              "name": "POS Search",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/search?q=saree",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    "search"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "saree"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "POS Search (In Stock)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/search?q=saree&in_stock_only=true",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    "search"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "saree"
+                    },
+                    {
+                      "key": "in_stock_only",
+                      "value": "true"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Out of Stock List",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/out-of-stock?page=1&limit=20&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    "out-of-stock"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bulk Upload",
+          "item": [
+            {
+              "name": "Download Template",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/bulk-upload/template"
+              }
+            },
+            {
+              "name": "Bulk Upload",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/bulk-upload",
+                "description": "Select .xlsx file in Body → form-data → key `file`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Images",
+          "item": [
+            {
+              "name": "Upload Image",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}/images",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": []
+                    },
+                    {
+                      "key": "imageseq",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "is_primary",
+                      "value": "1",
+                      "type": "text"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete Image",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/{{productId}}/images/1"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Product & inventory management. Set `productId` after Create Product."
+    },
+    {
+      "name": "Vendors",
+      "item": [
+        {
+          "name": "Vendor CRUD",
+          "item": [
+            {
+              "name": "List Vendors",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Vendor by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors?id={{vendorId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{vendorId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Vendor Dropdown",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/dropdown"
+              }
+            },
+            {
+              "name": "Create Vendor",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vendor_name\": \"Test Vendor\",\n  \"vendor_code\": \"V-PM-001\",\n  \"address\": \"Chennai\",\n  \"phone\": \"9876543210\",\n  \"email\": \"vendor@test.com\",\n  \"gst_number\": \"\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"vendorId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Vendor",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/{{vendorId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vendor_name\": \"Test Vendor Updated\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Vendor",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/{{vendorId}}"
+              }
+            },
+            {
+              "name": "Check Unique Code",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/check-unique-code",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vendor_code\": \"V-PM-001\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Check Unique GST",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/check-unique-gst",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"gst_number\": \"33AAAAA0000A1Z5\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Balance",
+          "item": [
+            {
+              "name": "Vendor Balance",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/{{vendorId}}/balance"
+              }
+            },
+            {
+              "name": "Balance Summary (All)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/balance-summary"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orders",
+          "item": [
+            {
+              "name": "List Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors/orders/list?vendor_id={{vendorId}}&page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors",
+                    "orders",
+                    "list"
+                  ],
+                  "query": [
+                    {
+                      "key": "vendor_id",
+                      "value": "{{vendorId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Order by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors/orders/list?id={{orderId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors",
+                    "orders",
+                    "list"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{orderId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/orders",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vendor_id\": \"{{vendorId}}\",\n  \"bill_no\": \"VBILL-001\",\n  \"order_date\": \"2026-05-31\",\n  \"no_of_packages\": 2,\n  \"no_of_items\": 50,\n  \"total_value\": 10000,\n  \"gst_amount\": 500\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"orderId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Order",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/orders/{{orderId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"total_value\": 10500\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Order",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/orders/{{orderId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments",
+          "item": [
+            {
+              "name": "List Payments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors/payments/list?vendor_id={{vendorId}}&page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors",
+                    "payments",
+                    "list"
+                  ],
+                  "query": [
+                    {
+                      "key": "vendor_id",
+                      "value": "{{vendorId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Payment by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/vendors/payments/list?id={{paymentId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "vendors",
+                    "payments",
+                    "list"
+                  ],
+                  "query": [
+                    {
+                      "key": "id",
+                      "value": "{{paymentId}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/payments",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vendor_id\": \"{{vendorId}}\",\n  \"vendor_order_id\": \"{{orderId}}\",\n  \"amount\": 5000,\n  \"notes\": \"High\",\n  \"payment_date\": \"2026-05-31\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"paymentId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Payment",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/payments/{{paymentId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 5500\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Payment",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/vendors/payments/{{paymentId}}"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Vendor, orders & payments. Set `vendorId` after Create Vendor."
+    },
+    {
+      "name": "POS App",
+      "item": [
+        {
+          "name": "Billing",
+          "item": [
+            {
+              "name": "Next Bill Number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/billing/next-bill-no"
+              }
+            },
+            {
+              "name": "Quote",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/billing/quote",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billType\": \"POS\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"qty\": 1,\n      \"unitPrice\": 1500,\n      \"gstRate\": 5,\n      \"discount\": 0\n    }\n  ],\n  \"payments\": []\n}"
+                }
+              }
+            },
+            {
+              "name": "Check Stock",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/billing/check-stock",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"qty\": 1\n    }\n  ]\n}"
+                }
+              }
+            },
+            {
+              "name": "Checkout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/billing/checkout",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billType\": \"POS\",\n  \"staffId\": \"{{userId}}\",\n  \"orderNumber\": \"ORD-PM-001\",\n  \"customer\": {\n    \"name\": \"Test Customer\",\n    \"mobile\": \"9876543210\",\n    \"email\": \"\",\n    \"gstNumber\": \"\"\n  },\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"qty\": 1,\n      \"unitPrice\": 1500,\n      \"gstRate\": 5,\n      \"discount\": 0\n    }\n  ],\n  \"payments\": [\n    {\n      \"mode\": \"CASH\",\n      \"amount\": 1500\n    }\n  ]\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  if (j.success && j.data?.bill?.billNo) pm.collectionVariables.set(\"billNo\", j.data.bill.billNo);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Bill by Number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/billing/{{billNo}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Returns",
+          "item": [
+            {
+              "name": "Return Quote",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/returns/quote",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"parentBillNo\": \"{{billNo}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"qty\": 1\n    }\n  ]\n}"
+                }
+              }
+            },
+            {
+              "name": "Return Checkout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/returns/checkout",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"parentBillNo\": \"{{billNo}}\",\n  \"staffId\": \"{{userId}}\",\n  \"settlementMode\": \"CREDIT\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"qty\": 1\n    }\n  ]\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customers",
+          "item": [
+            {
+              "name": "Search Customers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/customers/search?q=987",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "customers",
+                    "search"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "987"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Credit Wallet",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/customers/{{customerId}}/credit-wallet"
+              }
+            },
+            {
+              "name": "Apply Wallet Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/customers/{{customerId}}/credit-wallet/apply",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 50\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "POS Reports",
+          "item": [
+            {
+              "name": "Daily Summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/daily-summary"
+              }
+            },
+            {
+              "name": "GST Summary (Today)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/gst-summary"
+              }
+            },
+            {
+              "name": "Payment Modes (Today)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/reports/payment-modes"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "New POS app API. Responses use `{ success, data, error }` format."
+    },
+    {
+      "name": "POS Billing (Admin)",
+      "item": [
+        {
+          "name": "Init & Billing",
+          "item": [
+            {
+              "name": "POS Init",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/init"
+              }
+            },
+            {
+              "name": "Preview Bill Number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/bill-number"
+              }
+            },
+            {
+              "name": "Check Billing Quantity",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/check-quantity",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"product_id\": \"{{productId}}\",\n      \"quantity\": 1\n    }\n  ]\n}"
+                }
+              }
+            },
+            {
+              "name": "Create Bill",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/billing",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staff_id\": \"{{userId}}\",\n  \"manual_order_number\": \"ORD-PM-001\",\n  \"customer\": {\n    \"name\": \"Walk-in Customer\",\n    \"mobile\": \"9999999999\",\n    \"email\": \"\",\n    \"gst_number\": \"\"\n  },\n  \"items\": [\n    {\n      \"product_id\": \"{{productId}}\",\n      \"quantity\": 1,\n      \"unit_price\": 500,\n      \"discount\": 0\n    }\n  ],\n  \"bill_discount\": 0,\n  \"credit_to_apply\": 0,\n  \"payments\": [\n    {\n      \"method\": \"cash\",\n      \"amount\": 250\n    },\n    {\n      \"method\": \"card\",\n      \"amount\": 250\n    }\n  ]\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.id;",
+                      "  if (id) pm.collectionVariables.set(\"billId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Bills",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/pos/bills?page=1&limit=20&from=2026-06-01&to=2026-06-30",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "pos",
+                    "bills"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-06-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-06-30"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Bill",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/bills/{{billId}}"
+              }
+            },
+            {
+              "name": "Print Receipt (HTML)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/bills/{{billId}}/print-receipt"
+              }
+            },
+            {
+              "name": "Invoice PDF",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/bills/{{billId}}/invoice-pdf"
+              }
+            },
+            {
+              "name": "Cancel Bill",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/cancel-bill",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bill_id\": \"{{billId}}\",\n  \"cancellation_reason\": \"Postman test cancel\",\n  \"staff_id\": \"{{userId}}\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Returns",
+          "item": [
+            {
+              "name": "Create Return",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/return",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"parent_bill_id\": \"{{billId}}\",\n  \"items\": [\n    {\n      \"product_id\": \"{{productId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"reason\": \"Postman test return\",\n  \"refund_method\": \"credit\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const j = pm.response.json();",
+                      "  const id = j.data.return_id || data.id;",
+                      "  if (id) pm.collectionVariables.set(\"returnId\", id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Returns",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/pos/returns?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "pos",
+                    "returns"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Return",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/returns/{{returnId}}"
+              }
+            },
+            {
+              "name": "Bill Returns List",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/bills/{{billId}}/returns"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer Credit",
+          "item": [
+            {
+              "name": "List Credit Wallets",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/pos/credit-wallets?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "pos",
+                    "credit-wallets"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Credit Balance",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/customers/{{customerId}}/credit-balance"
+              }
+            },
+            {
+              "name": "Credit History",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/customers/{{customerId}}/credit-history"
+              }
+            },
+            {
+              "name": "Adjust Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pos/customers/credit/adjust",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customerId}}\",\n  \"amount\": 100,\n  \"type\": \"credit\",\n  \"notes\": \"Manual adjustment\"\n}"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Legacy admin POS panel. Permission: `pos:*`, `credit:*`."
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "List Receipt Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/receipt-html?page=1&limit=20&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "receipt-html"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Receipt Template by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/receipt-html?id=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "receipt-html"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create/Update Receipt Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/settings/receipt-html",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Default Receipt\",\n  \"value\": \"<html><body><h1>Receipt</h1></body></html>\"\n}"
+            }
+          }
+        }
+      ],
+      "description": "Receipt print template settings. Permission: `pos:read`, `master:update`."
+    }
+  ]
+}
