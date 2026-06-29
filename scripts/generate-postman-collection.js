@@ -426,11 +426,11 @@ const collection = {
       folder("design_master", [
         request("List design_master", "GET", "/design_master", { query: "page=1&limit=50" }),
         request("Create design_master", "POST", "/design_master", {
-          body: { design_code: "DES-001", design_details: "Chettinad pattern", status: 1 },
+          body: { design_code: "DES-001", name: "Chettinad Pattern", design_details: "Chettinad pattern", status: 1 },
           test: SAVE_ID_TEST("designId"),
         }),
         request("Update design_master", "PUT", "/design_master/{{designId}}", {
-          body: { design_details: "Updated pattern" },
+          body: { name: "Chettinad Pattern Updated", design_details: "Updated pattern" },
         }),
         request("Delete design_master", "DELETE", "/design_master/{{designId}}"),
         request("Check Design Code Unique", "POST", "/design/check-unique-code", {

@@ -2,7 +2,7 @@ import { db, setSessionDefaults } from "../../../config/Database.js";
 import { master_configuration, ALLOWED_TABLES } from "../../../config/master_config.js";
 import { sendSuccess, sendError } from "../../../Utils/response.js";
 import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByIds, hardDeleteByIds } from "../../../Utils/bulkDelete.js";
-import { hasCrudId } from "../../../Utils/crudQuery.js";
+import { hasCrudId, getCrudId } from "../../../Utils/crudQuery.js";
 import { parseListQuery, buildLikeSearch, listResult } from "../../../Utils/listQuery.js";
 import { assertUniqueFields, buildWritePayload, getIdField } from "../../../Utils/masterValidation.js";
 
@@ -60,7 +60,7 @@ export const handleGet = async (req, res) => {
 
     if (hasCrudId(req)) {
       let detailSql = `SELECT * FROM ${config.table} WHERE ${idField} = ?`;
-      const detailParams = [req.query.id];
+      const detailParams = [getCrudId(req)];
       if (config.fields.some((f) => f.name === "status")) {
         detailSql += ` AND status != 0`;
       }

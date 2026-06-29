@@ -34,9 +34,12 @@ export const coerceFieldValue = (field, value) => {
 export const validateMasterData = (data, config, { mode = "create" } = {}) => {
   for (const field of config.fields) {
     const raw = data[field.name];
+    const provided = Object.prototype.hasOwnProperty.call(data, field.name);
 
     if (field.required && isEmpty(raw)) {
-      throw new Error(`${field.name} is required`);
+      if (mode === "create" || (mode === "update" && provided)) {
+        throw new Error(`${field.name} is required`);
+      }
     }
 
     if (!isEmpty(raw)) {
@@ -55,7 +58,8 @@ export const validateMasterData = (data, config, { mode = "create" } = {}) => {
   if (mode === "update" && config.uniqueScope?.length) {
     for (const scopeField of config.uniqueScope) {
       const scopeDef = config.fields.find((f) => f.name === scopeField);
-      if (scopeDef?.required && isEmpty(data[scopeField])) {
+      const provided = Object.prototype.hasOwnProperty.call(data, scopeField);
+      if (scopeDef?.required && provided && isEmpty(data[scopeField])) {
         throw new Error(`${scopeField} is required`);
       }
     }

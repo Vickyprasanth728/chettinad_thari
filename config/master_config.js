@@ -31,6 +31,7 @@ const master_configuration = () => ({
     table: "design_master",
     fields: [
       { name: "design_code", required: true, type: "string", unique: true, edit: 1 },
+      { name: "name", required: false, type: "string", edit: 1 },
       { name: "design_details", required: false, type: "string" },
       { name: "status", required: false, type: "number" },
     ],

@@ -18,6 +18,7 @@
     "migrate:password-reset": "node scripts/migrate-012-password-reset.js",
     "migrate:return-tracking": "node scripts/migrate-013-transactions-return-tracking.js",
     "migrate:vendor-payments-notes": "node scripts/migrate-014-vendor-payments-notes.js",
+    "migrate:design-master-name": "node scripts/migrate-015-design-master-name.js",
     "seed:sidebar-subcategory": "node scripts/add-sidebar-subcategory.js",
     "seed": "node scripts/seed.js",
     "seed:pos": "node scripts/seed-pos.js",
