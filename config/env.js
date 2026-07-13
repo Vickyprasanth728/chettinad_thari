@@ -1,8 +1,25 @@
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const isProduction = process.env.NODE_ENV === "production";
+
+function trimEnv(value) {
+  return String(value).trim().replace(/^['"]|['"]$/g, "");
+}
+
+/** Base URL for frontend links (emails, redirects). Prefers explicit FRONTEND_URL, then ALLOWED_ORIGIN. */
+export function getFrontendUrl() {
+  const url =
+    process.env.FRONTEND_URL ||
+    process.env.APP_URL ||
+    process.env.ALLOWED_ORIGIN ||
+    "http://localhost:3000";
+  return trimEnv(url).replace(/\/$/, "");
+}
 
 function requireEnv(key) {
   const value = process.env[key];
@@ -31,6 +48,7 @@ export function validateEnv() {
     isProduction,
     port: Number(process.env.PORT) || 8080,
     allowedOrigin: process.env.ALLOWED_ORIGIN || "http://localhost:3000",
+    frontendUrl: getFrontendUrl(),
     accessTokenExpiry: process.env.ACCESS_TOKEN_EXPIRY || "15m",
     refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || "7d",
     bcryptRounds: Number(process.env.BCRYPT_ROUNDS) || 12,

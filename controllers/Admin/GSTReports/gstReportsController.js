@@ -12,11 +12,10 @@ import {
   normalizeGstReportQuery,
   fetchInvoiceGstRows,
   fetchInvoiceGstSlabRows,
-  buildSummaryRows,
-  mapDetailedSlabReportRow,
-  aggregateSummaryFromInvoices,
-  aggregateDetailedTotals,
+  buildGstSummaryReport,
+  buildGstDetailedReport,
   buildReconciliation,
+  aggregateDetailedTotals,
   round2,
 } from "../../../Utils/gstReportHelper.js";
 
@@ -39,17 +38,28 @@ export const gstSummaryReport = async (req, res) => {
       return sendError(res, "Invalid date range", 400);
     }
 
-    const pagination = parseReportPagination(req.query);
     const invoices = await fetchInvoiceGstRows(db, filters);
-    const grouped = aggregateSummaryFromInvoices(invoices);
-    const { rows, grand } = buildSummaryRows(grouped);
-    const pageRows = slicePaginated(rows, pagination);
+    const report = buildGstSummaryReport(invoices, filters.voucherType);
 
     if (isJsonReportFormat(format)) {
-      return sendReportSuccess(res, "GST summary report", pageRows, rows.length, pagination);
+      return res.status(200).json({
+        status: true,
+        count: report.data.length + report.tax_data.length,
+        message: "GST summary report",
+        data: report.data,
+        tax_data: report.tax_data,
+        filters: {
+          from: filters.from || null,
+          to: filters.to || null,
+          voucher_type: filters.voucherType,
+          gst_type: filters.gstType,
+          store: filters.storeId || null,
+        },
+        totals: report.totals,
+      });
     }
 
-    return exportGst(res, rows, format, "gst_summary_report", "GST Summary Report", filters, rows.length);
+    return exportGst(res, report.rows, format, "gst_summary_report", "GST Summary Report", filters, report.rows.length);
   } catch (error) {
     return sendError(res, error.message, 500);
   }
@@ -68,36 +78,36 @@ export const gstDetailedReport = async (req, res) => {
     const pagination = parseReportPagination(req.query);
     const invoices = await fetchInvoiceGstRows(db, filters);
     const slabRows = await fetchInvoiceGstSlabRows(db, filters);
-    const rows = slabRows.map(mapDetailedSlabReportRow);
-    const pageRows = slicePaginated(rows, pagination);
-    const totals = aggregateDetailedTotals(invoices);
-
-    const payload = {
-      filters: {
-        from: filters.from || null,
-        to: filters.to || null,
-        voucher_type: filters.voucherType,
-        gst_type: filters.gstType,
-        store: filters.storeId || null,
-      },
-      rows: pageRows,
-      report_rows: rows.length,
-      invoice_count: totals.bill_count,
-      totals: {
-        net_amount: round2(totals.net_amount),
-        taxable_amount: round2(totals.taxable_amount),
-        total_tax: round2(totals.total_tax),
-        igst: round2(totals.igst),
-        cgst: round2(totals.cgst),
-        sgst: round2(totals.sgst),
-      },
+    const report = buildGstDetailedReport(slabRows, invoices, filters.voucherType, filters);
+    const dataPayload = {
+      ...report.dataSection,
+      rows: slicePaginated(report.dataSection.rows, pagination),
+    };
+    const taxDataPayload = {
+      ...report.taxDataSection,
+      rows: slicePaginated(report.taxDataSection.rows, pagination),
     };
 
     if (isJsonReportFormat(format)) {
-      return sendReportSuccess(res, "GST detailed report", payload, rows.length, pagination);
+      const salesRowCount = report.dataSection.report_rows;
+      const returnRowCount = report.taxDataSection.report_rows;
+
+      const body = {
+        status: true,
+        count: salesRowCount,
+        tax_data_count: returnRowCount,
+        message: "GST detailed report",
+        data: dataPayload,
+        tax_data: taxDataPayload,
+      };
+      if (pagination) {
+        body.page = pagination.page;
+        body.limit = pagination.limit;
+      }
+      return res.status(200).json(body);
     }
 
-    return exportGst(res, rows, format, "gst_detailed_report", "GST Detailed Report", filters, rows.length);
+    return exportGst(res, report.rows, format, "gst_detailed_report", "GST Detailed Report", filters, report.rows.length);
   } catch (error) {
     return sendError(res, error.message, 500);
   }
@@ -113,8 +123,7 @@ export const gstReconciliationReport = async (req, res) => {
     }
 
     const invoices = await fetchInvoiceGstRows(db, filters);
-    const grouped = aggregateSummaryFromInvoices(invoices);
-    const { grand } = buildSummaryRows(grouped);
+    const { grand } = buildGstSummaryReport(invoices, filters.voucherType);
     const detailedTotals = aggregateDetailedTotals(invoices);
     const reconciliation = buildReconciliation(grand, detailedTotals, invoices);
 

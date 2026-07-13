@@ -4,16 +4,30 @@ import { sendSuccess, sendError } from "../../../Utils/response.js";
 import { hasCrudId } from "../../../Utils/crudQuery.js";
 import { parseListQuery, buildLikeSearch, listResult } from "../../../Utils/listQuery.js";
 import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByIds } from "../../../Utils/bulkDelete.js";
+import {
+  buildUserListScope,
+  canAccessUser,
+  canAssignRoleById,
+} from "../../../Utils/userRoleScope.js";
 
 const nullIfEmpty = (value) =>
   value === undefined || value === null || value === "" ? null : value;
+
+async function fetchRoleById(roleId) {
+  const [[role]] = await db.query(`SELECT id, name FROM roles WHERE id = ? AND status != 0`, {
+    replacements: [roleId],
+  });
+  return role;
+}
 
 export const AddUser = async (req, res) => {
   try {
     await setSessionDefaults();
     const { username, password, name, email, mobileno, role_id, status = 1 } = req.body;
-    if (!username || !password || !role_id) {
-      return sendError(res, "username, password and role_id are required");
+    const targetRole = await fetchRoleById(role_id);
+    if (!targetRole) return sendError(res, "Invalid role", 400);
+    if (!canAssignRoleById(req.user, targetRole.id, targetRole.name)) {
+      return sendError(res, "You are not allowed to assign this role", 403);
     }
     const normalizedUsername = username.trim().toLowerCase();
     const hashed = await bcrypt.hash(password, 10);
@@ -61,11 +75,15 @@ export const GetUsers = async (req, res) => {
     if (hasCrudId(req)) {
       const user = await fetchUserById(req.query.id);
       if (!user) return sendError(res, "User not found", 404);
+      if (!canAccessUser(req.user, user)) {
+        return sendError(res, "You are not allowed to view this user", 403);
+      }
       return sendSuccess(res, "User fetched", user);
     }
 
     const { page, limit, offset, search } = parseListQuery(req.query, { defaultLimit: 20 });
     const roleId = req.query.role_id;
+    const roleScope = buildUserListScope(req.user);
 
     let where = "WHERE u.status != 0";
     const params = [];
@@ -75,6 +93,8 @@ export const GetUsers = async (req, res) => {
     );
     where += searchPart.clause;
     params.push(...searchPart.params);
+    where += roleScope.clause;
+    params.push(...roleScope.params);
     if (roleId) {
       where += " AND u.role_id = ?";
       params.push(roleId);
@@ -87,7 +107,7 @@ export const GetUsers = async (req, res) => {
       { replacements: [...params, limit, offset] }
     );
     const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM users u ${where}`,
+      `SELECT COUNT(*) AS total FROM users u LEFT JOIN roles r ON r.id = u.role_id ${where}`,
       { replacements: params }
     );
     return sendSuccess(res, "Users fetched", listResult(users, { page, limit, total }));
@@ -99,11 +119,28 @@ export const GetUsers = async (req, res) => {
 export const UpdateUser = async (req, res) => {
   try {
     const { id } = req.params;
+    const existingUser = await fetchUserById(id);
+    if (!existingUser) return sendError(res, "User not found", 404);
+    if (!canAccessUser(req.user, existingUser)) {
+      return sendError(res, "You are not allowed to update this user", 403);
+    }
+
     const { username, password, name, email, mobileno, role_id, status } = req.body;
+    if (role_id) {
+      const targetRole = await fetchRoleById(role_id);
+      if (!targetRole) return sendError(res, "Invalid role", 400);
+      if (!canAssignRoleById(req.user, targetRole.id, targetRole.name)) {
+        return sendError(res, "You are not allowed to assign this role", 403);
+      }
+    }
+
     const fields = [];
     const params = [];
     if (username) { fields.push("username = ?"); params.push(username.trim().toLowerCase()); }
-    if (password) { fields.push("password = ?"); params.push(await bcrypt.hash(password, 10)); }
+    if (password) {
+      fields.push("password = ?");
+      params.push(await bcrypt.hash(password, 10));
+    }
     if (name !== undefined) { fields.push("name = ?"); params.push(name); }
     if (email !== undefined) { fields.push("email = ?"); params.push(email); }
     if (mobileno !== undefined) { fields.push("mobileno = ?"); params.push(mobileno); }
@@ -123,6 +160,14 @@ export const UpdateUser = async (req, res) => {
 export const DeleteUser = async (req, res) => {
   try {
     const ids = getRecordIds(req);
+    for (const id of ids) {
+      const user = await fetchUserById(id);
+      if (!user) return sendError(res, "User not found", 404);
+      if (!canAccessUser(req.user, user)) {
+        return sendError(res, "You are not allowed to delete this user", 403);
+      }
+    }
+
     await softDeleteByIds("users", ids, {
       setClause: "status = 0, updatedby = ?",
       setParams: [req.user.id],

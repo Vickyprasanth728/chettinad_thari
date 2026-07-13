@@ -131,7 +131,12 @@ export const posApplyWallet = async (req, res) => {
 export const posSearchProducts = async (req, res) => {
   try {
     const data = await posApp.searchProducts(req.query.q, req.query);
-    return posSuccess(res, data);
+    return res.status(200).json({
+      success: true,
+      count: Array.isArray(data) ? data.length : 0,
+      data,
+      meta: {},
+    });
   } catch (error) {
     return handleError(res, error);
   }

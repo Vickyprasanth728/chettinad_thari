@@ -21,13 +21,13 @@
 
 | ID | Scenario | Request | Expected |
 |----|----------|---------|----------|
-| PS-01 | Search by name | `GET /products/search?q=saree` | `200`, `success: true`, array with `productId`, `name`, `stockQty`, `stockStatus`, `stockNo`, `lowStockThreshold` |
+| PS-01 | Search by stock no fragment | `GET /products/search?q=CT` | `200`, `success: true`, `count` = `data.length`, items match `stockNo` only (not name/productId) |
 | PS-02 | Search by stock no | `GET /products/search?q=CT-002` | `200`, at least one match where `stockNo` matches |
 | PS-03 | Search by stock no | `GET /products/search?q=CT-001` | `200`, match on `stockNo` if exists |
-| PS-04 | QR JSON scan | `GET /products/search?q={"stock_number":"CT-001","id":1}` | `200`, exact product match |
-| PS-05 | Empty query | `GET /products/search?q=` | `200`, list up to 20 published products |
-| PS-06 | No match | `GET /products/search?q=zzznomatch999` | `200`, `data: []` |
-| PS-07 | In stock only filter | `GET /products/search?q=saree&in_stock_only=true` | `200`, every item has `stockQty > 0` |
+| PS-04 | QR JSON scan | `GET /products/search?q={"stock_number":"CT-001","id":1}` | `200`, exact match on `stock_number` |
+| PS-05 | Empty query | `GET /products/search?q=` | `200`, list all published products, with `count` |
+| PS-06 | No match | `GET /products/search?q=zzznomatch999` | `200`, `data: []`, `count: 0` |
+| PS-07 | In stock only filter | `GET /products/search?q=&in_stock_only=true` | `200`, every item has `stockQty > 0` |
 | PS-08 | Out-of-stock visible without filter | `GET /products/search?q=<product B stock no>` | `200`, item has `stockStatus: "out_of_stock"`, `stockQty: 0` |
 | PS-09 | Out-of-stock hidden with filter | `GET /products/search?q=<product B stock no>&in_stock_only=true` | `200`, product B **not** in list |
 | PS-10 | Low stock status | Product C qty = 3, threshold 5 | `stockStatus: "low_stock"` |

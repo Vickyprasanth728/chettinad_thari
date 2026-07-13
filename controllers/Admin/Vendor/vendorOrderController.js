@@ -3,6 +3,7 @@ import { sendSuccess, sendError } from "../../../Utils/response.js";
 import { hasCrudId, getCrudId } from "../../../Utils/crudQuery.js";
 import { parseListQuery, buildLikeSearch, listResult } from "../../../Utils/listQuery.js";
 import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByIds } from "../../../Utils/bulkDelete.js";
+import { validateVendorOrderPayload } from "../../../Utils/vendorOrderValidation.js";
 
 function orderDateFilter(from, to, alias = "vo") {
   if (from && to) {
@@ -162,14 +163,22 @@ export const getVendorOrdersVendorsMapDetail = async (req, res) => {
 
 export const addVendorOrder = async (req, res) => {
   try {
+    const validation = validateVendorOrderPayload(req.body, { mode: "create" });
+    if (!validation.ok) return sendError(res, validation.errors.join(", "), 400);
+
+    const { vendor_id, order_date } = req.body;
+    if (!vendor_id) return sendError(res, "vendor id is required", 400);
+    if (!order_date) return sendError(res, "order date is required", 400);
+
+    const { bill_no, no_of_packages, no_of_items, total_value, gst_amount } = validation.values;
+
     await setSessionDefaults();
-    const { vendor_id, bill_no, order_date, no_of_packages, no_of_items, total_value, gst_amount = 0 } = req.body;
     const [id] = await db.query(
       `INSERT INTO vendor_orders (vendor_id, bill_no, order_date, no_of_packages, no_of_items, total_value, gst_amount, createdby)
        VALUES (?,?,?,?,?,?,?,?)`,
       {
         replacements: [
-          vendor_id, bill_no, order_date, no_of_packages || 0, no_of_items || 0,
+          vendor_id, bill_no, order_date, no_of_packages, no_of_items,
           total_value, gst_amount, req.user?.id,
         ],
       }
@@ -224,16 +233,28 @@ export const getVendorOrderById = async (req, res) => {
 };
 
 export const updateVendorOrder = async (req, res) => {
-  const fields = ["bill_no", "order_date", "no_of_packages", "no_of_items", "total_value", "gst_amount", "status"];
-  const updates = [];
-  const params = [];
-  for (const f of fields) {
-    if (req.body[f] !== undefined) { updates.push(`${f} = ?`); params.push(req.body[f]); }
+  try {
+    const validation = validateVendorOrderPayload(req.body, { mode: "update" });
+    if (!validation.ok) return sendError(res, validation.errors.join(", "), 400);
+
+    const fields = ["bill_no", "order_date", "no_of_packages", "no_of_items", "total_value", "gst_amount", "status"];
+    const updates = [];
+    const params = [];
+    for (const f of fields) {
+      const value = validation.values[f] !== undefined ? validation.values[f] : req.body[f];
+      if (value !== undefined) {
+        updates.push(`${f} = ?`);
+        params.push(value);
+      }
+    }
+    if (!updates.length) return sendError(res, "No fields to update");
+    params.push(req.recordId ?? req.params.id);
+    await db.query(`UPDATE vendor_orders SET ${updates.join(", ")} WHERE id = ?`, { replacements: params });
+    return sendSuccess(res, "Vendor order updated");
+  } catch (error) {
+    if (error.original?.code === "ER_DUP_ENTRY") return sendError(res, "Bill number already exists for vendor");
+    return sendError(res, error.message, 500);
   }
-  if (!updates.length) return sendError(res, "No fields to update");
-  params.push(req.recordId ?? req.params.id);
-  await db.query(`UPDATE vendor_orders SET ${updates.join(", ")} WHERE id = ?`, { replacements: params });
-  return sendSuccess(res, "Vendor order updated");
 };
 
 export const deleteVendorOrder = async (req, res) => {

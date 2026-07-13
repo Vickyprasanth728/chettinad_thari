@@ -26,6 +26,7 @@ const PERMISSIONS = [
 ];
 
 const ROLE_PERMISSIONS = {
+  "Super Admin": PERMISSIONS,
   Admin: PERMISSIONS,
   "Billing Staff": [
     "auth:signin", "pos:billing", "pos:check_quantity", "pos:bill_number", "pos:read",
@@ -141,6 +142,21 @@ async function seed() {
      ON DUPLICATE KEY UPDATE password = VALUES(password), role_id = VALUES(role_id)`,
     {
       replacements: [
+        "superadmin",
+        hashed,
+        "Super Admin",
+        "superadmin@chettinad.com",
+        "9876543211",
+        roleIds["Super Admin"],
+      ],
+    }
+  );
+  await db.query(
+    `INSERT INTO users (username, password, name, email, mobileno, role_id, status)
+     VALUES (?, ?, ?, ?, ?, ?, 1)
+     ON DUPLICATE KEY UPDATE password = VALUES(password), role_id = VALUES(role_id)`,
+    {
+      replacements: [
         "admin",
         hashed,
         "System Admin",
@@ -155,7 +171,7 @@ async function seed() {
     `INSERT IGNORE INTO gst (name, tax, type, status) VALUES ('GST 5%', 5, 'inclusive', 1), ('GST 12%', 12, 'inclusive', 1), ('GST 18%', 18, 'inclusive', 1)`
   );
 
-  console.log("Seed completed. Default login: admin / admin123");
+  console.log("Seed completed. Logins: superadmin / admin123 (all users), admin / admin123 (no super admins)");
   process.exit(0);
 }
 

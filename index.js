@@ -6,8 +6,8 @@ import responseTime from "response-time";
 import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
-import { connectDB } from "./config/Database.js";
 import { validateEnv } from "./config/env.js";
+import { connectDB } from "./config/Database.js";
 import routes from "./routes/index.js";
 
 const envConfig = validateEnv();
@@ -84,4 +84,5 @@ process.on("unhandledRejection", (reason) => {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Frontend URL (reset links): ${envConfig.frontendUrl}`);
 });

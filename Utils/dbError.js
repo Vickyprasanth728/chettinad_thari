@@ -6,6 +6,7 @@ const CONSTRAINT_MESSAGES = {
   uk_sidebar_path: "Sidebar path already exists",
   uk_gmaster_value: "This value already exists for the selected master",
   uk_product_name: "Product name already exists",
+  uk_design_master_name: "Design name already exists",
   name: "Name already exists",
   stock_no: "Stock no already exists",
   username: "Username already exists",
@@ -50,6 +51,9 @@ export function getDbErrorResponse(error) {
   if (keyName === "uk_product_name" || /for key 'uk_product_name'/i.test(sqlMessage)) {
     return { message: "Product name already exists", status: 409 };
   }
+  if (keyName === "uk_design_master_name" || /for key 'uk_design_master_name'/i.test(sqlMessage)) {
+    return { message: "Design name already exists", status: 409 };
+  }
 
   if (keyName === "stock_no" || /for key 'stock_no'/i.test(sqlMessage)) {
     return { message: "Stock no already exists", status: 409 };
@@ -69,6 +73,7 @@ export function getReadableDbErrorMessage(error, fallback = "Upload failed") {
 
   if (code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(sqlMessage)) {
     if (/uk_product_name|product_name/i.test(sqlMessage)) return "Product name already exists";
+    if (/uk_design_master_name/i.test(sqlMessage)) return "Design name already exists";
     if (/stock_no/i.test(sqlMessage)) return "Stock no already exists";
     return "Duplicate entry — record already exists";
   }

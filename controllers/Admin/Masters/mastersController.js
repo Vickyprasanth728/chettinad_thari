@@ -5,6 +5,7 @@ import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByI
 import { hasCrudId, getCrudId } from "../../../Utils/crudQuery.js";
 import { parseListQuery, buildLikeSearch, listResult } from "../../../Utils/listQuery.js";
 import { assertUniqueFields, buildWritePayload, getIdField } from "../../../Utils/masterValidation.js";
+import { assertGstDeletable } from "../GST/gstController.js";
 
 export const handleAdd = async (req, res) => {
   try {
@@ -111,7 +112,10 @@ export const handleDelete = async (req, res) => {
     const ids = getRecordIds(req);
     const hasStatus = config.fields.some((f) => f.name === "status");
 
-    if (hasStatus) {
+    if (config.hardDelete) {
+      if (config.table === "gst") await assertGstDeletable(ids);
+      await hardDeleteByIds(config.table, ids, { idColumn: idField });
+    } else if (hasStatus) {
       await softDeleteByIds(config.table, ids, { idColumn: idField });
     } else {
       await hardDeleteByIds(config.table, ids, { idColumn: idField });

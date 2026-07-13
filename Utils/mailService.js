@@ -72,15 +72,13 @@ function getTransporter() {
   return { transporter, from: config.from };
 }
 
-export function getFrontendUrl() {
-  return (envVal("FRONTEND_URL", "APP_URL") || "http://localhost:3000").replace(/\/$/, "");
-}
-
 export function isMailConfigured() {
   return getSmtpConfig() !== null;
 }
 
 export async function sendPasswordResetEmail({ to, name, resetUrl }) {
+  console.log('resetUrl',resetUrl);
+  
   const mail = getTransporter();
   const displayName = name || "User";
   const subject = "Reset your Chettinad Thari password";
@@ -118,7 +116,7 @@ export async function sendPasswordResetEmail({ to, name, resetUrl }) {
       text,
       html,
     });
-    logInfo(`Password reset email sent to ${to}`, "mail.passwordReset");
+    logInfo(`Password reset email sent to ${to}. Reset URL: ${resetUrl}`, "mail.passwordReset");
     return { sent: true };
   } catch (error) {
     logError(error, "mail.passwordReset");

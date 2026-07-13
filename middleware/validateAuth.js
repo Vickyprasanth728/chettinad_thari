@@ -1,14 +1,35 @@
 import Joi from "joi";
+import {
+  USERNAME_MIN_LENGTH,
+  USERNAME_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MAX_LENGTH,
+} from "../config/authFieldConfig.js";
+
+export { PASSWORD_MIN_LENGTH } from "../config/authFieldConfig.js";
+
+const usernameSchema = Joi.string()
+  .trim()
+  .min(USERNAME_MIN_LENGTH)
+  .max(USERNAME_MAX_LENGTH)
+  .required()
+  .messages({
+    "string.min": `Username must be at least ${USERNAME_MIN_LENGTH} characters`,
+    "any.required": "Username is required",
+  });
+
+const passwordSchema = Joi.string()
+  .min(PASSWORD_MIN_LENGTH)
+  .max(PASSWORD_MAX_LENGTH)
+  .required()
+  .messages({
+    "string.min": `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+    "any.required": "Password is required",
+  });
 
 const signinSchema = Joi.object({
-  username: Joi.string().trim().min(3).max(100).required().messages({
-    "string.min": "Username must be at least 3 characters",
-    "any.required": "Username is required",
-  }),
-  password: Joi.string().min(6).max(128).required().messages({
-    "string.min": "Password must be at least 6 characters",
-    "any.required": "Password is required",
-  }),
+  username: usernameSchema,
+  password: passwordSchema,
 });
 
 const refreshSchema = Joi.object({
@@ -28,10 +49,7 @@ const resetPasswordSchema = Joi.object({
     "string.length": "Invalid or expired reset token",
     "any.required": "Reset token is required",
   }),
-  password: Joi.string().min(6).max(128).required().messages({
-    "string.min": "Password must be at least 6 characters",
-    "any.required": "Password is required",
-  }),
+  password: passwordSchema,
   confirm_password: Joi.string().valid(Joi.ref("password")).required().messages({
     "any.only": "Passwords do not match",
     "any.required": "Password confirmation is required",

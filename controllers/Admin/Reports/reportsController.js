@@ -8,6 +8,7 @@ import {
   PAYMENT_TYPE_LABELS,
   formatPaymentAmountsBreakdown,
   formatPaymentTypeNamesFromRaw,
+  formatPaymentMethodsList,
   normalizePaymentMethod,
 } from "../../../Utils/paymentMethodHelper.js";
 import {
@@ -161,6 +162,10 @@ function buildCancelledBillWhere(filters, params) {
   return where;
 }
 
+function roundReportMoney(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
 function mapReportTransaction(row) {
   const quantity = Number(row.quantity) || 0;
   const returnedQty = Number(row.returned_qty) || 0;
@@ -184,6 +189,7 @@ function mapReportTransaction(row) {
     unit_price: row.unit_price,
     discount: row.discount,
     gst_rate: row.gst_rate,
+    gst_type: row.gst_type,
     gst_amount: row.gst_amount,
     cgst: row.cgst,
     sgst: row.sgst,
@@ -193,6 +199,116 @@ function mapReportTransaction(row) {
     status: row.status,
     line_status: row.line_status,
   };
+}
+
+/**
+ * In-depth PDF/Excel ratio — match dashboard monthly sales (SUM of bill.total).
+ * Exclude cancelled lines/qty only; keep returned qty on the original sale bill
+ * (returns are separate vouchers; bill.total still holds the original sale).
+ */
+function getInDepthAmountRatio(tx) {
+  if (!tx || Number(tx.status) === 0) return 0;
+  const quantity = Number(tx.quantity) || 0;
+  if (quantity <= 0) return 0;
+  const cancelled = Number(tx.cancelled_qty) || 0;
+  return Math.max(quantity - cancelled, 0) / quantity;
+}
+
+function getInDepthExportQty(tx) {
+  if (!tx || Number(tx.status) === 0) return 0;
+  const quantity = Number(tx.quantity) || 0;
+  const cancelled = Number(tx.cancelled_qty) || 0;
+  return Math.max(quantity - cancelled, 0);
+}
+
+/**
+ * Line amounts after cancel adjustment (before bill-level reconcile to tb.total).
+ */
+function getInDepthExportAmounts(tx) {
+  if (!tx) {
+    return {
+      quantity: "",
+      discount: "",
+      gst_amount: "",
+      cgst: "",
+      sgst: "",
+      igst: "",
+      line_total: "",
+    };
+  }
+
+  const ratio = getInDepthAmountRatio(tx);
+  const qty = getInDepthExportQty(tx);
+
+  return {
+    quantity: qty,
+    discount: roundReportMoney((Number(tx.discount) || 0) * ratio),
+    gst_amount: roundReportMoney((Number(tx.gst_amount) || 0) * ratio),
+    cgst: roundReportMoney((Number(tx.cgst) || 0) * ratio),
+    sgst: roundReportMoney((Number(tx.sgst) || 0) * ratio),
+    igst: roundReportMoney((Number(tx.igst) || 0) * ratio),
+    line_total: roundReportMoney((Number(tx.line_total) || 0) * ratio),
+  };
+}
+
+/** Scale money fields so per-bill line sums match dashboard bill.total / gst_total (credit, etc.). */
+function reconcileInDepthRowsToBill(bill, rows) {
+  if (!rows.length) return rows;
+
+  const billTotal = Number(bill.total);
+  const billGst = Number(bill.gst_total);
+  const sumLine = rows.reduce((s, r) => s + (Number(r.line_total) || 0), 0);
+  const sumGst = rows.reduce((s, r) => s + (Number(r.gst_amount) || 0), 0);
+
+  if (Number.isFinite(billTotal) && Math.abs(sumLine - billTotal) > 0.009) {
+    if (sumLine > 0) {
+      const factor = billTotal / sumLine;
+      let allocated = 0;
+      for (let i = 0; i < rows.length; i++) {
+        if (i === rows.length - 1) {
+          rows[i].line_total = roundReportMoney(billTotal - allocated);
+          rows[i].discount = roundReportMoney((Number(rows[i].discount) || 0) * factor);
+        } else {
+          rows[i].line_total = roundReportMoney((Number(rows[i].line_total) || 0) * factor);
+          rows[i].discount = roundReportMoney((Number(rows[i].discount) || 0) * factor);
+          allocated = roundReportMoney(allocated + Number(rows[i].line_total));
+        }
+      }
+    } else if (billTotal === 0) {
+      for (const row of rows) row.line_total = 0;
+    }
+  }
+
+  if (Number.isFinite(billGst) && Math.abs(sumGst - billGst) > 0.009) {
+    if (sumGst > 0) {
+      const factor = billGst / sumGst;
+      let allocated = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const prevGst = Number(rows[i].gst_amount) || 0;
+        let nextGst;
+        if (i === rows.length - 1) {
+          nextGst = roundReportMoney(billGst - allocated);
+        } else {
+          nextGst = roundReportMoney(prevGst * factor);
+          allocated = roundReportMoney(allocated + nextGst);
+        }
+        const splitFactor = prevGst > 0 ? nextGst / prevGst : 0;
+        rows[i].gst_amount = nextGst;
+        rows[i].cgst = roundReportMoney((Number(rows[i].cgst) || 0) * splitFactor);
+        rows[i].sgst = roundReportMoney((Number(rows[i].sgst) || 0) * splitFactor);
+        rows[i].igst = roundReportMoney((Number(rows[i].igst) || 0) * splitFactor);
+      }
+    } else if (billGst === 0) {
+      for (const row of rows) {
+        row.gst_amount = 0;
+        row.cgst = 0;
+        row.sgst = 0;
+        row.igst = 0;
+      }
+    }
+  }
+
+  return rows;
 }
 
 async function fetchBillTransactions(billIds) {
@@ -210,6 +326,7 @@ async function fetchBillTransactions(billIds) {
             t.unit_price,
             t.discount,
             g.tax AS gst_rate,
+            g.type AS gst_type,
             t.gst_amount,
             t.cgst,
             t.sgst,
@@ -244,6 +361,92 @@ async function enrichBillRowsWithTransactions(rows) {
     ...row,
     transactions: txByBill[row.id] || [],
   }));
+}
+
+function buildInDepthExportRows(data) {
+  const exportRows = [];
+  let sNo = 0;
+
+  for (const bill of data) {
+    const paymentType = formatPaymentMethodsList(bill.payment_type) || "";
+    const lineItems = bill.transactions?.length ? bill.transactions : [null];
+    const billRows = [];
+
+    for (const tx of lineItems) {
+      const amounts = getInDepthExportAmounts(tx);
+      billRows.push({
+        date: bill.date,
+        bill_no: bill.bill_no,
+        staff: bill.staff || "—",
+        payment_type: paymentType,
+        product_name: tx?.product_name || bill.items_billed || "",
+        stock_no: tx?.stock_no || "",
+        quantity: amounts.quantity,
+        unit_price: tx?.unit_price ?? "",
+        discount: amounts.discount,
+        gst_rate: tx?.gst_rate ?? "",
+        gst_amount: amounts.gst_amount,
+        cgst: amounts.cgst,
+        sgst: amounts.sgst,
+        igst: amounts.igst,
+        line_total: amounts.line_total,
+        cancelled_qty: tx?.cancelled_qty ?? "",
+        returned_qty: tx?.returned_qty ?? "",
+        remaining_qty: tx?.remaining_qty ?? "",
+        cancelled_amount: tx?.cancelled_amount ?? "",
+        line_status: tx?.line_status
+          ? String(tx.line_status).replace(/\b\w/g, (c) => c.toUpperCase())
+          : "",
+      });
+    }
+
+    reconcileInDepthRowsToBill(bill, billRows);
+
+    for (const row of billRows) {
+      sNo += 1;
+      exportRows.push({ s_no: sNo, ...row });
+    }
+  }
+
+  return exportRows;
+}
+
+const IN_DEPTH_EXCEL_COLUMNS = [
+  { key: "s_no", header: "S.No" },
+  { key: "date", header: "Date" },
+  { key: "bill_no", header: "Bill No" },
+  { key: "staff", header: "Staff" },
+  { key: "payment_type", header: "Payment Type" },
+  { key: "product_name", header: "Product Name" },
+  { key: "stock_no", header: "Stock No" },
+  { key: "quantity", header: "Quantity" },
+  { key: "unit_price", header: "Unit Price" },
+  { key: "discount", header: "Discount" },
+  { key: "gst_rate", header: "GST Rate" },
+  { key: "gst_amount", header: "GST Amount" },
+  { key: "cgst", header: "CGST" },
+  { key: "sgst", header: "SGST" },
+  { key: "igst", header: "IGST" },
+  { key: "line_total", header: "Line Total" },
+  { key: "cancelled_qty", header: "Cancelled Qty" },
+  { key: "returned_qty", header: "Returned Qty" },
+  { key: "remaining_qty", header: "Remaining Qty" },
+  { key: "cancelled_amount", header: "Cancelled Amount" },
+  { key: "line_status", header: "Line Status" },
+];
+
+function sendInDepthExcel(res, rows, filename) {
+  const sheetRows = [
+    IN_DEPTH_EXCEL_COLUMNS.map((col) => col.header),
+    ...rows.map((row) => IN_DEPTH_EXCEL_COLUMNS.map((col) => row[col.key] ?? "")),
+  ];
+  const ws = xlsx.utils.aoa_to_sheet(sheetRows);
+  const wb = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(wb, ws, "In-Depth Report");
+  const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Disposition", `attachment; filename=${filename}.xlsx`);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.send(buf);
 }
 
 const BILL_DETAILS_FROM = `
@@ -530,7 +733,13 @@ export const vendorReport = async (req, res) => {
     if (isJsonReportFormat(filters.format)) {
       return sendReportSuccess(res, "Report data", pageData, total, pagination);
     }
-    const flatRows = data.map(({ transactions, ...rest }) => rest);
+    const flatRows = data.map(({ id, vendor_name, total_purchase, paid_amount, pending_amount }) => ({
+      id,
+      vendor_name,
+      total_purchase,
+      paid_amount,
+      pending_amount,
+    }));
     return exportOrJson(res, flatRows, filters.format, "vendor_report", {
       from: filters.from,
       to: filters.to,
@@ -550,7 +759,8 @@ export const inDepthReport = async (req, res) => {
     const where = buildBillWhere(filters, params);
     const count = await countDistinctBills(where, params, IN_DEPTH_FROM);
 
-    let sql = `SELECT tb.id AS id, DATE(tb.createdon) AS date, tb.bill_no, GROUP_CONCAT(p.product_name) AS items_billed,
+    let sql = `SELECT tb.id AS id, DATE(tb.createdon) AS date, tb.bill_no, tb.total, tb.gst_total,
+              GROUP_CONCAT(p.product_name) AS items_billed,
               GROUP_CONCAT(DISTINCT sp.payment_method) AS payment_type, u.name AS staff
        ${IN_DEPTH_FROM}
        ${where} GROUP BY tb.id ORDER BY tb.createdon DESC`;
@@ -560,10 +770,21 @@ export const inDepthReport = async (req, res) => {
       queryParams.push(pagination.limit, pagination.offset);
     }
     const [rows] = await db.query(sql, { replacements: queryParams });
-    return respondBillReport(res, rows, filters.format, "in_depth_report", {
+    const data = await enrichBillRowsWithTransactions(rows);
+    const total = count != null ? count : data.length;
+
+    if (isJsonReportFormat(filters.format)) {
+      return sendReportSuccess(res, "Report data", data, total, pagination);
+    }
+
+    if (filters.format === "excel") {
+      return sendInDepthExcel(res, buildInDepthExportRows(data), "in_depth_report");
+    }
+
+    return exportOrJson(res, buildInDepthExportRows(data), filters.format, "in_depth_report", {
       from: filters.from,
       to: filters.to,
-    }, count, pagination);
+    });
   } catch (error) {
     return sendError(res, error.message, 500);
   }

@@ -3,7 +3,7 @@ import { db, setSessionDefaults } from "../../../config/Database.js";
 import { sendSuccess, sendError } from "../../../Utils/response.js";
 
 import { respondDbError } from "../../../Utils/dbError.js";
-import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByIds } from "../../../Utils/bulkDelete.js";
+import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, hardDeleteByIds } from "../../../Utils/bulkDelete.js";
 
 import { hasCrudId, sqlReplacements } from "../../../Utils/crudQuery.js";
 
@@ -99,6 +99,22 @@ function normalizeGstTax(tax) {
 
   return value;
 
+}
+
+
+
+export async function assertGstDeletable(ids) {
+  for (const id of ids) {
+    const [[{ productCount }]] = await db.query(
+      `SELECT COUNT(*) AS productCount FROM products WHERE gst_id = ?`,
+      { replacements: [id] }
+    );
+    if (Number(productCount) > 0) {
+      const err = new Error(`Cannot delete GST ${id} linked to products`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
 }
 
 
@@ -264,11 +280,15 @@ export const DeleteGst = async (req, res) => {
     await setSessionDefaults();
 
     const ids = getRecordIds(req);
-    await softDeleteByIds("gst", ids);
+
+    await assertGstDeletable(ids);
+    await hardDeleteByIds("gst", ids);
 
     return sendSuccess(res, deleteSuccessMessage(ids.length), deleteSuccessPayload(ids));
 
   } catch (error) {
+
+    if (error.statusCode) return sendError(res, error.message, error.statusCode);
 
     return respondDbError(res, error, "Failed to delete GST");
 

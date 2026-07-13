@@ -2,7 +2,7 @@ import { db, setSessionDefaults } from "../../../config/Database.js";
 import { sendSuccess, sendError } from "../../../Utils/response.js";
 import { hasCrudId } from "../../../Utils/crudQuery.js";
 import { parseListQuery, buildLikeSearch, listResult } from "../../../Utils/listQuery.js";
-import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, softDeleteByIds } from "../../../Utils/bulkDelete.js";
+import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload, hardDeleteByIds } from "../../../Utils/bulkDelete.js";
 
 async function getCategoryRow(id) {
   const [[row]] = await db.query(
@@ -30,11 +30,7 @@ async function assertUniqueName(name, parentId, excludeId = null) {
   }
   const [rows] = await db.query(sql, { replacements: params });
   if (rows.length > 0) {
-    const err = new Error(
-      parentId === null
-        ? "Parent category name already exists"
-        : "Subcategory name already exists under this parent"
-    );
+    const err = new Error("Category name already exists");
     err.code = "DUPLICATE_NAME";
     throw err;
   }
@@ -82,7 +78,7 @@ export const addCategory = async (req, res) => {
     return sendSuccess(res, "Category created", { id });
   } catch (error) {
     if (error.code === "DUPLICATE_NAME" || error.original?.code === "ER_DUP_ENTRY") {
-      return sendError(res, error.message || "Category name already exists under this parent");
+      return sendError(res, error.message || "Category name already exists");
     }
     return sendError(res, error.message, 500);
   }
@@ -134,12 +130,15 @@ export const getCategories = async (req, res) => {
       }
     }
 
-    const searchPart = buildLikeSearch(["c.name"], search);
+    const fromJoin = `FROM product_categories c
+       LEFT JOIN product_categories p ON p.id = c.parent_id`;
+
+    const searchPart = buildLikeSearch(["c.name", "p.name"], search);
     where += searchPart.clause;
     params.push(...searchPart.params);
 
     const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM product_categories c ${where}`,
+      `SELECT COUNT(*) AS total ${fromJoin} ${where}`,
       { replacements: params }
     );
 
@@ -147,8 +146,7 @@ export const getCategories = async (req, res) => {
       `SELECT c.id, c.name, c.parent_id, c.status, c.createdon, c.updatedon,
               p.name AS parent_name,
               (SELECT COUNT(*) FROM product_categories sc WHERE sc.parent_id = c.id AND sc.status != 0) AS subcategory_count
-       FROM product_categories c
-       LEFT JOIN product_categories p ON p.id = c.parent_id
+       ${fromJoin}
        ${where}
        ORDER BY c.parent_id IS NULL DESC, c.name ASC
        LIMIT ? OFFSET ?`,
@@ -222,37 +220,48 @@ export const updateCategory = async (req, res) => {
     return sendSuccess(res, "Category updated");
   } catch (error) {
     if (error.code === "DUPLICATE_NAME" || error.original?.code === "ER_DUP_ENTRY") {
-      return sendError(res, error.message || "Category name already exists under this parent");
+      return sendError(res, error.message || "Category name already exists");
     }
     return sendError(res, error.message, 500);
   }
 };
 
+export async function assertCategoryDeletable(ids) {
+  for (const id of ids) {
+    // Count all child rows (including status=0): parent_id FK is ON DELETE RESTRICT
+    const [[{ childCount }]] = await db.query(
+      `SELECT COUNT(*) AS childCount FROM product_categories WHERE parent_id = ?`,
+      { replacements: [id] }
+    );
+    if (Number(childCount) > 0) {
+      const err = new Error(`Cannot delete category ${id} with subcategories. Delete subcategories first.`);
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Count all products (including status=0): products.category_id FK blocks hard delete
+    const [[{ productCount }]] = await db.query(
+      `SELECT COUNT(*) AS productCount FROM products WHERE category_id = ?`,
+      { replacements: [id] }
+    );
+    if (Number(productCount) > 0) {
+      const err = new Error(`Cannot delete category ${id} linked to products`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+}
+
 export const deleteCategory = async (req, res) => {
   try {
     const ids = getRecordIds(req);
-
-    for (const id of ids) {
-      const [[{ childCount }]] = await db.query(
-        `SELECT COUNT(*) AS childCount FROM product_categories WHERE parent_id = ? AND status != 0`,
-        { replacements: [id] }
-      );
-      if (Number(childCount) > 0) {
-        return sendError(res, `Cannot delete category ${id} with subcategories. Delete subcategories first.`);
-      }
-
-      const [[{ productCount }]] = await db.query(
-        `SELECT COUNT(*) AS productCount FROM products WHERE category_id = ? AND status != 0`,
-        { replacements: [id] }
-      );
-      if (Number(productCount) > 0) {
-        return sendError(res, `Cannot delete category ${id} linked to products`);
-      }
-    }
-
-    await softDeleteByIds("product_categories", ids);
+    await assertCategoryDeletable(ids);
+    await hardDeleteByIds("product_categories", ids);
     return sendSuccess(res, deleteSuccessMessage(ids.length), deleteSuccessPayload(ids));
   } catch (error) {
+    if (error?.original?.code === "ER_ROW_IS_REFERENCED_2") {
+      return sendError(res, "Cannot delete category linked to other records", 409);
+    }
     return sendError(res, error.message, error.statusCode || 500);
   }
 };
@@ -295,6 +304,89 @@ export async function validateProductCategoryId(categoryId) {
   );
   if (!row) return { ok: false, message: "Category not found" };
   return { ok: true, categoryId: cid };
+}
+
+/**
+ * Resolve bulk-upload Category + Sub Category names to the subcategory id.
+ * Category must be a parent row (parent_id IS NULL).
+ * Sub Category must be a child of that parent (parent_id = parent.id).
+ */
+export async function resolveBulkCategoryPairOrError(categoryName, subCategoryName) {
+  const parentName = String(categoryName ?? "").trim();
+  const subName = String(subCategoryName ?? "").trim();
+
+  if (!parentName) return { error: "Category is mandatory" };
+  if (!subName) return { error: "Sub Category is mandatory" };
+
+  const [[parentCategory]] = await db.query(
+    `SELECT id, name, parent_id
+     FROM product_categories
+     WHERE name = ? AND parent_id IS NULL AND status != 0
+     LIMIT 1`,
+    { replacements: [parentName] }
+  );
+
+  if (!parentCategory) {
+    const [[categoryAsChild]] = await db.query(
+      `SELECT c.id, p.name AS parent_name
+       FROM product_categories c
+       LEFT JOIN product_categories p ON p.id = c.parent_id
+       WHERE c.name = ? AND c.parent_id IS NOT NULL AND c.status != 0
+       LIMIT 1`,
+      { replacements: [parentName] }
+    );
+    if (categoryAsChild) {
+      return {
+        error: `Category '${parentName}' is a Sub Category under '${categoryAsChild.parent_name}', not a parent Category`,
+      };
+    }
+    return { error: `Category not found: ${parentName}` };
+  }
+
+  const [[subCategory]] = await db.query(
+    `SELECT id, name, parent_id
+     FROM product_categories
+     WHERE name = ? AND parent_id = ? AND status != 0
+     LIMIT 1`,
+    { replacements: [subName, parentCategory.id] }
+  );
+
+  if (!subCategory) {
+    const [[subAsParent]] = await db.query(
+      `SELECT id FROM product_categories
+       WHERE name = ? AND parent_id IS NULL AND status != 0
+       LIMIT 1`,
+      { replacements: [subName] }
+    );
+    if (subAsParent) {
+      return {
+        error: `Sub Category '${subName}' is a parent Category. Use it in the Category column and pick a child Sub Category`,
+      };
+    }
+
+    const [otherParents] = await db.query(
+      `SELECT DISTINCT p.name AS parent_name
+       FROM product_categories c
+       INNER JOIN product_categories p ON p.id = c.parent_id AND p.status != 0
+       WHERE c.name = ? AND c.parent_id IS NOT NULL AND c.status != 0`,
+      { replacements: [subName] }
+    );
+    if (otherParents.length) {
+      const parentNames = otherParents.map((row) => row.parent_name).join(", ");
+      return {
+        error: `Sub Category '${subName}' not found under Category '${parentName}'. It exists under: ${parentNames}`,
+      };
+    }
+
+    return { error: `Sub Category not found: ${subName} under Category ${parentName}` };
+  }
+
+  return {
+    categoryId: subCategory.id,
+    parentCategoryId: parentCategory.id,
+    parentCategoryName: parentCategory.name,
+    subCategoryName: subCategory.name,
+  };
 }
 
 export const checkCategoryNameUnique = async (req, res) => {

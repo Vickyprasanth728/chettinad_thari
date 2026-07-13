@@ -8,7 +8,7 @@ Permission: `pos:read` (search, out-of-stock list) · `pos:billing` (check-stock
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/products/search?q=&in_stock_only=true` | Product search; each row has `stockQty`, `stockStatus`, `stockNo`, `lowStockThreshold` |
+| GET | `/products/search?q=&in_stock_only=true` | Search by `stockNo` only; response includes `count` plus rows with `stockQty`, `stockStatus`, `stockNo`, `lowStockThreshold` |
 | GET | `/products/out-of-stock?search=&page=1&limit=20` | Paginated products with `quantity < 1` |
 | POST | `/billing/check-stock` | Validate cart qty before checkout |
 | POST | `/billing/quote` | GST quote + `stockOk`, `stockLines`, `stockWarnings` |

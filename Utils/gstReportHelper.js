@@ -8,6 +8,25 @@ export const SELLER_STATE_CODE = String(process.env.SELLER_STATE_CODE || "33").p
 
 const GSTIN_PATTERN = "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$";
 
+/** Line ratio for GST reporting — matches dashboard bill totals (includes returned lines on original sale). */
+export const GST_EFFECTIVE_LINE_RATIO_SQL = `CASE
+  WHEN t.id IS NULL THEN 0
+  WHEN t.status = 0 THEN 0
+  WHEN t.status = 2 THEN 1
+  WHEN COALESCE(t.quantity, 0) > 0 THEN GREATEST(0, t.quantity - COALESCE(t.cancelled_qty, 0) - COALESCE(t.returned_qty, 0)) / t.quantity
+  ELSE 0
+END`;
+
+export const GST_EFFECTIVE_QTY_SQL = `CASE
+  WHEN t.id IS NULL THEN 0
+  WHEN t.status = 0 THEN 0
+  WHEN t.status = 2 THEN COALESCE(t.quantity, 0)
+  WHEN COALESCE(t.quantity, 0) > 0 THEN GREATEST(0, t.quantity - COALESCE(t.cancelled_qty, 0) - COALESCE(t.returned_qty, 0))
+  ELSE 0
+END`;
+
+export const GST_REPORTABLE_TX_JOIN = "t.bill_id = tb.id AND t.status != 0";
+
 export const GST_STATE_NAMES = {
   "01": "Jammu and Kashmir",
   "02": "Himachal Pradesh",
@@ -199,20 +218,26 @@ export function resolveInvoiceGstRates(row) {
   return { igstRate: "0%", cgstRate: "0%", sgstRate: "0%" };
 }
 
-export function buildSummaryRows(grouped) {
+export function buildSummaryRows(grouped, options = {}) {
+  const { voucherType = null, includeGrandTotal = true, grandGroupLabel = "Grand Total" } = options;
   const order = ["B2B", "B2C Small", "B2C Large"];
+
+  const withVoucher = (row) => (voucherType ? { "Voucher Type": voucherType, ...row } : row);
+
   const rows = order
     .filter((group) => grouped[group])
-    .map((group) => ({
-      Group: group,
-      "Count of Bills": grouped[group].count,
-      "Net Amount": round2(grouped[group].netAmount),
-      "Taxable Amount": round2(grouped[group].taxableAmount),
-      "Total Tax Amount": round2(grouped[group].totalTax),
-      "IGST Amount": round2(grouped[group].igst),
-      "CGST Amount": round2(grouped[group].cgst),
-      "SGST Amount": round2(grouped[group].sgst),
-    }));
+    .map((group) =>
+      withVoucher({
+        Group: group,
+        "Count of Bills": grouped[group].count,
+        "Net Amount": round2(grouped[group].netAmount),
+        "Taxable Amount": round2(grouped[group].taxableAmount),
+        "Total Tax Amount": round2(grouped[group].totalTax),
+        "IGST Amount": round2(grouped[group].igst),
+        "CGST Amount": round2(grouped[group].cgst),
+        "SGST Amount": round2(grouped[group].sgst),
+      })
+    );
 
   const grand = rows.reduce(
     (acc, row) => ({
@@ -227,8 +252,50 @@ export function buildSummaryRows(grouped) {
     { count: 0, netAmount: 0, taxableAmount: 0, totalTax: 0, igst: 0, cgst: 0, sgst: 0 }
   );
 
-  rows.push({
-    Group: "Grand Total",
+  if (includeGrandTotal) {
+    rows.push(
+      withVoucher({
+        Group: grandGroupLabel,
+        "Count of Bills": grand.count,
+        "Net Amount": round2(grand.netAmount),
+        "Taxable Amount": round2(grand.taxableAmount),
+        "Total Tax Amount": round2(grand.totalTax),
+        "IGST Amount": round2(grand.igst),
+        "CGST Amount": round2(grand.cgst),
+        "SGST Amount": round2(grand.sgst),
+      })
+    );
+  }
+
+  return { rows, grand };
+}
+
+const EMPTY_SUMMARY_GRAND = Object.freeze({
+  count: 0,
+  netAmount: 0,
+  taxableAmount: 0,
+  totalTax: 0,
+  igst: 0,
+  cgst: 0,
+  sgst: 0,
+});
+
+function subtractSummaryGrand(salesGrand, returnGrand) {
+  return {
+    count: salesGrand.count + returnGrand.count,
+    netAmount: round2(salesGrand.netAmount - returnGrand.netAmount),
+    taxableAmount: round2(salesGrand.taxableAmount - returnGrand.taxableAmount),
+    totalTax: round2(salesGrand.totalTax - returnGrand.totalTax),
+    igst: round2(salesGrand.igst - returnGrand.igst),
+    cgst: round2(salesGrand.cgst - returnGrand.cgst),
+    sgst: round2(salesGrand.sgst - returnGrand.sgst),
+  };
+}
+
+function grandToSummaryRow(voucherType, grand, groupLabel = "Grand Total") {
+  return {
+    "Voucher Type": voucherType,
+    Group: groupLabel,
     "Count of Bills": grand.count,
     "Net Amount": round2(grand.netAmount),
     "Taxable Amount": round2(grand.taxableAmount),
@@ -236,9 +303,69 @@ export function buildSummaryRows(grouped) {
     "IGST Amount": round2(grand.igst),
     "CGST Amount": round2(grand.cgst),
     "SGST Amount": round2(grand.sgst),
-  });
+  };
+}
 
-  return { rows, grand };
+export function formatGstSummaryTotals({ salesGrand, returnGrand, netGrand }) {
+  return {
+    sales_bill_count: salesGrand.count,
+    return_bill_count: returnGrand.count,
+    bill_count: netGrand.count,
+    sales_amount: round2(salesGrand.netAmount),
+    return_amount: round2(returnGrand.netAmount),
+    net_amount: round2(netGrand.netAmount),
+    sales_taxable_amount: round2(salesGrand.taxableAmount),
+    return_taxable_amount: round2(returnGrand.taxableAmount),
+    taxable_amount: round2(netGrand.taxableAmount),
+    sales_tax_amount: round2(salesGrand.totalTax),
+    return_tax_amount: round2(returnGrand.totalTax),
+    total_tax: round2(netGrand.totalTax),
+    igst: round2(netGrand.igst),
+    cgst: round2(netGrand.cgst),
+    sgst: round2(netGrand.sgst),
+  };
+}
+
+/** Build GST summary rows + totals. Sales/returns are never merged into one gross total. */
+export function buildGstSummaryReport(invoices, voucherType = "sale") {
+  if (voucherType === "all") {
+    const salesInvoices = invoices.filter((inv) => inv.bill_type === "sale");
+    const returnInvoices = invoices.filter((inv) => inv.bill_type === "return");
+
+    const salesGrouped = aggregateSummaryFromInvoices(salesInvoices);
+    const returnGrouped = aggregateSummaryFromInvoices(returnInvoices);
+
+    const { rows: salesRows, grand: salesGrand } = buildSummaryRows(salesGrouped, { voucherType: "Sales" });
+    const { rows: returnRows, grand: returnGrand } = returnInvoices.length
+      ? buildSummaryRows(returnGrouped, { voucherType: "Returns" })
+      : { rows: [], grand: { ...EMPTY_SUMMARY_GRAND } };
+
+    const netGrand = subtractSummaryGrand(salesGrand, returnGrand);
+    const taxData = [...returnRows, grandToSummaryRow("Net", netGrand)];
+
+    return {
+      data: salesRows,
+      tax_data: taxData,
+      rows: [...salesRows, ...taxData],
+      grand: netGrand,
+      totals: formatGstSummaryTotals({ salesGrand, returnGrand, netGrand }),
+    };
+  }
+
+  const grouped = aggregateSummaryFromInvoices(invoices);
+  const sectionLabel = voucherType === "return" ? "Returns" : "Sales";
+  const { rows, grand } = buildSummaryRows(grouped, { voucherType: sectionLabel });
+  const salesGrand = voucherType === "return" ? { ...EMPTY_SUMMARY_GRAND } : grand;
+  const returnGrand = voucherType === "return" ? grand : { ...EMPTY_SUMMARY_GRAND };
+  const netGrand = voucherType === "return" ? subtractSummaryGrand(EMPTY_SUMMARY_GRAND, grand) : grand;
+
+  return {
+    data: voucherType === "return" ? [] : rows,
+    tax_data: voucherType === "return" ? rows : [],
+    rows,
+    grand,
+    totals: formatGstSummaryTotals({ salesGrand, returnGrand, netGrand }),
+  };
 }
 
 function normalizeSummaryGrand(grand) {
@@ -250,6 +377,142 @@ function normalizeSummaryGrand(grand) {
     igst: grand.igst ?? grand["IGST Amount"] ?? 0,
     cgst: grand.cgst ?? grand["CGST Amount"] ?? 0,
     sgst: grand.sgst ?? grand["SGST Amount"] ?? 0,
+  };
+}
+
+function allocateProportionally(slabs, field, target) {
+  const goal = round2(target);
+  const sourceSum = round2(slabs.reduce((sum, row) => sum + Number(row[field] || 0), 0));
+
+  if (!slabs.length) return [];
+  if (sourceSum <= 0) {
+    const even = round2(goal / slabs.length);
+    return slabs.map((_, index) =>
+      index === slabs.length - 1 ? round2(goal - even * (slabs.length - 1)) : even
+    );
+  }
+
+  let allocated = 0;
+  return slabs.map((slab, index) => {
+    if (index === slabs.length - 1) return round2(goal - allocated);
+    const value = round2((Number(slab[field] || 0) / sourceSum) * goal);
+    allocated = round2(allocated + value);
+    return value;
+  });
+}
+
+function splitAllocatedTax(totalTax, slabs, sourceField) {
+  const goal = round2(totalTax);
+  const sourceSum = round2(slabs.reduce((sum, row) => sum + Number(row[sourceField] || 0), 0));
+  if (sourceSum <= 0) {
+    if (sourceField === "igst") return slabs.map(() => 0);
+    const half = round2(goal / 2);
+    return slabs.map((_, index) => (index === slabs.length - 1 ? round2(goal - half * (slabs.length - 1)) : half));
+  }
+  return allocateProportionally(slabs, sourceField, goal);
+}
+
+/** Scale slab rows per bill so sums match invoice header (credit, discount, returns). */
+export function reconcileSlabRowsToInvoiceTotals(rows) {
+  if (!rows.length) return rows;
+
+  const byBill = new Map();
+  for (const row of rows) {
+    if (!byBill.has(row.bill_id)) byBill.set(row.bill_id, []);
+    byBill.get(row.bill_id).push(row);
+  }
+
+  const reconciled = [];
+  for (const slabs of byBill.values()) {
+    const header = slabs[0];
+    const targetNet = round2(header.invoice_net_amount);
+    const targetTax = round2(targetNet <= 0 ? 0 : header.invoice_gst_total);
+    const targetTaxable = round2(targetNet <= 0 ? 0 : targetNet - targetTax);
+
+    const slabNetSum = round2(slabs.reduce((sum, row) => sum + Number(row.net_amount || 0), 0));
+
+    if (targetNet <= 0) {
+      for (const slab of slabs) {
+        reconciled.push({
+          ...slab,
+          taxable_amount: 0,
+          cgst: 0,
+          sgst: 0,
+          igst: 0,
+          total_tax: 0,
+          net_amount: 0,
+        });
+      }
+      continue;
+    }
+
+    if (slabNetSum <= 0 && targetNet > 0) {
+      reconciled.push(buildHeaderOnlySlabRow(header));
+      continue;
+    }
+
+    const nets = allocateProportionally(slabs, "net_amount", targetNet);
+    const taxes = allocateProportionally(slabs, "total_tax", targetTax);
+    const taxables = allocateProportionally(slabs, "taxable_amount", targetTaxable);
+    const igsts = splitAllocatedTax(targetTax, slabs, "igst");
+    const cgsts = splitAllocatedTax(targetTax, slabs, "cgst");
+    const sgsts = splitAllocatedTax(targetTax, slabs, "sgst");
+
+    slabs.forEach((slab, index) => {
+      const totalTax = taxes[index];
+      let igst = igsts[index];
+      let cgst = cgsts[index];
+      let sgst = sgsts[index];
+
+      if (totalTax > 0 && round2(igst + cgst + sgst) !== totalTax) {
+        if (igst > 0) {
+          igst = totalTax;
+          cgst = 0;
+          sgst = 0;
+        } else {
+          cgst = round2(totalTax / 2);
+          sgst = round2(totalTax - cgst);
+          igst = 0;
+        }
+      }
+
+      reconciled.push({
+        ...slab,
+        taxable_amount: taxables[index],
+        total_tax: totalTax,
+        net_amount: nets[index],
+        igst,
+        cgst,
+        sgst,
+      });
+    });
+  }
+
+  return reconciled.sort(
+    (a, b) =>
+      new Date(a.invoice_date) - new Date(b.invoice_date) ||
+      String(a.bill_no).localeCompare(String(b.bill_no)) ||
+      Number(a.gst_rate) - Number(b.gst_rate)
+  );
+}
+
+function buildHeaderOnlySlabRow(header) {
+  const targetNet = round2(header.invoice_net_amount);
+  const targetTax = round2(header.invoice_gst_total);
+  const targetTaxable = round2(targetNet - targetTax);
+  const half = round2(targetTax / 2);
+
+  return {
+    ...header,
+    hsn_code: header.hsn_code || "N/A",
+    gst_rate: 0,
+    total_qty: 0,
+    taxable_amount: targetTaxable,
+    cgst: half,
+    sgst: round2(targetTax - half),
+    igst: 0,
+    total_tax: targetTax,
+    net_amount: targetNet,
   };
 }
 
@@ -300,36 +563,38 @@ export async function fetchInvoiceGstSlabRows(db, filters) {
         tb.bill_type,
         tb.createdon AS invoice_date,
         tb.total AS invoice_net_amount,
+        tb.gst_total AS invoice_gst_total,
         COALESCE(bc.name, 'Walk-in Customer') AS party_name,
         bc.gst_number AS customer_gst,
         COALESCE(NULLIF(p.hsn_code, ''), 'N/A') AS hsn_code,
         CASE
-          WHEN t.gst_amount > 0 THEN COALESCE(g.tax, 0)
+          WHEN COALESCE(t.gst_amount, 0) > 0 THEN COALESCE(g.tax, 0)
           ELSE 0
         END AS gst_rate,
-        SUM(t.quantity) AS total_qty,
-        COALESCE(SUM(t.line_total - t.gst_amount), 0) AS taxable_amount,
-        COALESCE(SUM(t.cgst), 0) AS cgst,
-        COALESCE(SUM(t.sgst), 0) AS sgst,
-        COALESCE(SUM(t.igst), 0) AS igst,
-        COALESCE(SUM(t.gst_amount), 0) AS total_tax,
-        COALESCE(SUM(t.line_total), 0) AS slab_net_amount
+        COALESCE(SUM(${GST_EFFECTIVE_QTY_SQL}), 0) AS total_qty,
+        COALESCE(SUM(ROUND((t.line_total - t.gst_amount) * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS taxable_amount,
+        COALESCE(SUM(ROUND(t.cgst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS cgst,
+        COALESCE(SUM(ROUND(t.sgst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS sgst,
+        COALESCE(SUM(ROUND(t.igst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS igst,
+        COALESCE(SUM(ROUND(t.gst_amount * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS total_tax,
+        COALESCE(SUM(ROUND(t.line_total * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS slab_net_amount
      FROM transaction_billing tb
      LEFT JOIN billing_customers bc ON bc.id = tb.customer_id
-     INNER JOIN transactions t ON t.bill_id = tb.id AND t.status = 1
+     LEFT JOIN transactions t ON ${GST_REPORTABLE_TX_JOIN}
      LEFT JOIN products p ON p.id = t.product_id
      LEFT JOIN gst g ON g.id = COALESCE(t.gst_id, p.gst_id)
      ${where}
      GROUP BY
-        tb.id, tb.bill_no, tb.bill_type, tb.createdon, tb.total,
+        tb.id, tb.bill_no, tb.bill_type, tb.createdon, tb.total, tb.gst_total,
         bc.name, bc.gst_number,
         COALESCE(NULLIF(p.hsn_code, ''), 'N/A'),
-        CASE WHEN t.gst_amount > 0 THEN COALESCE(g.tax, 0) ELSE 0 END
+        CASE WHEN COALESCE(t.gst_amount, 0) > 0 THEN COALESCE(g.tax, 0) ELSE 0 END
+     HAVING total_qty > 0 OR invoice_net_amount > 0
      ORDER BY tb.createdon, tb.bill_no, gst_rate`,
     { replacements: params }
   );
 
-  return rows.map((row) => {
+  const normalized = rows.map((row) => {
     const cgst = round2(row.cgst);
     const sgst = round2(row.sgst);
     let igst = round2(row.igst);
@@ -350,6 +615,46 @@ export async function fetchInvoiceGstSlabRows(db, filters) {
 
     return { ...row, taxable_amount: taxable, cgst, sgst, igst, total_tax: totalTax, net_amount: net };
   });
+
+  const reconciled = reconcileSlabRowsToInvoiceTotals(normalized);
+  const coveredBillIds = new Set(reconciled.map((row) => row.bill_id));
+  const headerOnlyRows = await fetchHeaderOnlySlabRows(db, filters, coveredBillIds);
+
+  return [...reconciled, ...headerOnlyRows];
+}
+
+async function fetchHeaderOnlySlabRows(db, filters, coveredBillIds) {
+  const params = [];
+  const where = buildRetailGstWhere(filters, params);
+  const excludeClause = coveredBillIds.size
+    ? ` AND tb.id NOT IN (${[...coveredBillIds].map(() => "?").join(", ")})`
+    : "";
+  if (coveredBillIds.size) params.push(...coveredBillIds);
+
+  const [rows] = await db.query(
+    `SELECT
+        tb.id AS bill_id,
+        tb.bill_no,
+        tb.bill_type,
+        tb.createdon AS invoice_date,
+        tb.total AS invoice_net_amount,
+        tb.gst_total AS invoice_gst_total,
+        COALESCE(bc.name, 'Walk-in Customer') AS party_name,
+        bc.gst_number AS customer_gst
+     FROM transaction_billing tb
+     LEFT JOIN billing_customers bc ON bc.id = tb.customer_id
+     ${where}${excludeClause}
+       AND tb.total > 0
+       AND NOT EXISTS (
+         SELECT 1 FROM transactions t
+         WHERE ${GST_REPORTABLE_TX_JOIN}
+           AND (${GST_EFFECTIVE_QTY_SQL}) > 0
+       )
+     ORDER BY tb.createdon, tb.bill_no`,
+    { replacements: params }
+  );
+
+  return rows.map(buildHeaderOnlySlabRow);
 }
 
 export function resolveSlabGstRates(gstRate, row) {
@@ -418,11 +723,11 @@ export async function fetchInvoiceGstRows(db, filters) {
         COALESCE(tb.igst, 0) AS header_igst,
         COALESCE(bc.name, 'Walk-in Customer') AS party_name,
         bc.gst_number AS customer_gst,
-        COALESCE(SUM(t.quantity), 0) AS total_qty,
-        COALESCE(SUM(t.line_total - t.gst_amount), 0) AS line_taxable,
-        COALESCE(SUM(t.cgst), 0) AS line_cgst,
-        COALESCE(SUM(t.sgst), 0) AS line_sgst,
-        COALESCE(SUM(t.igst), 0) AS line_igst,
+        COALESCE(SUM(${GST_EFFECTIVE_QTY_SQL}), 0) AS total_qty,
+        COALESCE(SUM(ROUND((t.line_total - t.gst_amount) * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS line_taxable,
+        COALESCE(SUM(ROUND(t.cgst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS line_cgst,
+        COALESCE(SUM(ROUND(t.sgst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS line_sgst,
+        COALESCE(SUM(ROUND(t.igst * (${GST_EFFECTIVE_LINE_RATIO_SQL}), 2)), 0) AS line_igst,
         GROUP_CONCAT(DISTINCT NULLIF(p.hsn_code, '') ORDER BY p.hsn_code SEPARATOR ', ') AS hsn_codes,
         GROUP_CONCAT(DISTINCT
           CASE
@@ -432,7 +737,7 @@ export async function fetchInvoiceGstRows(db, filters) {
           ORDER BY 1 SEPARATOR ', ') AS gst_rates
      FROM transaction_billing tb
      LEFT JOIN billing_customers bc ON bc.id = tb.customer_id
-     LEFT JOIN transactions t ON t.bill_id = tb.id AND t.status = 1
+     LEFT JOIN transactions t ON ${GST_REPORTABLE_TX_JOIN}
      LEFT JOIN products p ON p.id = t.product_id
      LEFT JOIN gst g ON g.id = COALESCE(t.gst_id, p.gst_id)
      ${where}
@@ -451,8 +756,8 @@ function hasHeaderTaxBreakdown(row) {
 
 export function normalizeInvoiceTaxRow(row) {
   const net = round2(row.net_amount);
-  const totalTax = round2(row.total_tax);
-  const taxable = round2(net - totalTax);
+  const totalTax = net <= 0 ? 0 : round2(row.total_tax);
+  const taxable = net <= 0 ? 0 : round2(Math.max(0, net - totalTax));
 
   let cgst = 0;
   let sgst = 0;
@@ -496,6 +801,18 @@ export function normalizeInvoiceTaxRow(row) {
           difference: round2(net - lineNet),
         }
       : null;
+
+  if (net <= 0) {
+    return {
+      ...row,
+      taxable_amount: 0,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      total_tax: 0,
+      line_mismatch: null,
+    };
+  }
 
   return {
     ...row,
@@ -583,4 +900,180 @@ export function aggregateDetailedTotals(invoices) {
     }),
     { bill_count: 0, net_amount: 0, taxable_amount: 0, total_tax: 0, igst: 0, cgst: 0, sgst: 0 }
   );
+}
+
+function invoicesToSummaryGrand(invoices) {
+  const totals = aggregateDetailedTotals(invoices);
+  return {
+    count: totals.bill_count,
+    netAmount: totals.net_amount,
+    taxableAmount: totals.taxable_amount,
+    totalTax: totals.total_tax,
+    igst: totals.igst,
+    cgst: totals.cgst,
+    sgst: totals.sgst,
+  };
+}
+
+export function buildGstDetailedTotals(invoices, voucherType = "sale") {
+  if (voucherType === "all") {
+    const salesInvoices = invoices.filter((inv) => inv.bill_type === "sale");
+    const returnInvoices = invoices.filter((inv) => inv.bill_type === "return");
+    const salesGrand = invoicesToSummaryGrand(salesInvoices);
+    const returnGrand = invoicesToSummaryGrand(returnInvoices);
+    const netGrand = subtractSummaryGrand(salesGrand, returnGrand);
+    return formatGstSummaryTotals({ salesGrand, returnGrand, netGrand });
+  }
+
+  const grand = invoicesToSummaryGrand(invoices);
+  const salesGrand = voucherType === "return" ? { ...EMPTY_SUMMARY_GRAND } : grand;
+  const returnGrand = voucherType === "return" ? grand : { ...EMPTY_SUMMARY_GRAND };
+  const netGrand = voucherType === "return" ? subtractSummaryGrand(EMPTY_SUMMARY_GRAND, grand) : grand;
+  return formatGstSummaryTotals({ salesGrand, returnGrand, netGrand });
+}
+
+export function buildGstDetailedReport(slabRows, invoices, voucherType = "sale", filters = {}) {
+  const salesSlabs = slabRows.filter((row) => row.bill_type === "sale");
+  const returnSlabs = slabRows.filter((row) => row.bill_type === "return");
+
+  const data = salesSlabs.map(mapDetailedSlabReportRow);
+  const tax_data = returnSlabs.map(mapDetailedSlabReportRow);
+  const rows = [...data, ...tax_data];
+
+  const salesInvoices = invoices.filter((inv) => inv.bill_type === "sale");
+  const returnInvoices = invoices.filter((inv) => inv.bill_type === "return");
+
+  const salesGrand = invoicesToSummaryGrand(salesInvoices);
+  const returnGrand = invoicesToSummaryGrand(returnInvoices);
+  const dataSlabTotals = aggregateSlabRowTotals(salesSlabs);
+  const taxDataSlabTotals = aggregateSlabRowTotals(returnSlabs);
+
+  const salesRows = voucherType === "return" ? [] : data;
+  const returnRows = voucherType === "sale" ? [] : tax_data;
+
+  const dataSection = buildDetailedSectionPayload(
+    filters,
+    salesRows,
+    salesRows.length,
+    salesInvoices.length,
+    salesGrand,
+    dataSlabTotals,
+    "sales"
+  );
+
+  const taxDataSection =
+    voucherType === "sale"
+      ? emptyDetailedSectionPayload(filters)
+      : buildDetailedSectionPayload(
+          filters,
+          returnRows,
+          returnRows.length,
+          returnInvoices.length,
+          returnGrand,
+          taxDataSlabTotals,
+          "returns"
+        );
+
+  return {
+    data: salesRows,
+    tax_data: returnRows,
+    rows,
+    rowCount: rows.length,
+    dataSection,
+    taxDataSection,
+  };
+}
+
+export function aggregateSlabRowTotals(rows) {
+  return rows.reduce(
+    (acc, row) => ({
+      net_amount: acc.net_amount + Number(row.net_amount ?? row["Invoice Value"] ?? 0),
+      taxable_amount: acc.taxable_amount + Number(row.taxable_amount ?? row["Taxable Value"] ?? 0),
+      total_tax:
+        acc.total_tax +
+        Number(
+          row.total_tax ??
+            (Number(row["IGST Amount"] || 0) + Number(row["CGST Amount"] || 0) + Number(row["SGST Amount"] || 0))
+        ),
+      igst: acc.igst + Number(row.igst ?? row["IGST Amount"] ?? 0),
+      cgst: acc.cgst + Number(row.cgst ?? row["CGST Amount"] ?? 0),
+      sgst: acc.sgst + Number(row.sgst ?? row["SGST Amount"] ?? 0),
+    }),
+    { net_amount: 0, taxable_amount: 0, total_tax: 0, igst: 0, cgst: 0, sgst: 0 }
+  );
+}
+
+export function formatGstReportTotals(totals) {
+  return {
+    bill_count: totals.bill_count ?? 0,
+    sales_amount: round2(totals.sales_amount ?? totals.net_amount),
+    return_amount: round2(totals.return_amount ?? 0),
+    net_amount: round2(totals.net_amount),
+    taxable_amount: round2(totals.taxable_amount),
+    total_tax: round2(totals.total_tax),
+    igst: round2(totals.igst),
+    cgst: round2(totals.cgst),
+    sgst: round2(totals.sgst),
+  };
+}
+
+function formatGstReportFilters(filters) {
+  return {
+    from: filters.from || null,
+    to: filters.to || null,
+    voucher_type: filters.voucherType,
+    gst_type: filters.gstType,
+    store: filters.storeId || null,
+  };
+}
+
+function grandToSectionReportTotals(grand, section = "sales") {
+  const isReturn = section === "returns";
+  return formatGstReportTotals({
+    bill_count: grand.count,
+    sales_amount: isReturn ? 0 : grand.netAmount,
+    return_amount: isReturn ? grand.netAmount : 0,
+    net_amount: grand.netAmount,
+    taxable_amount: grand.taxableAmount,
+    total_tax: grand.totalTax,
+    igst: grand.igst,
+    cgst: grand.cgst,
+    sgst: grand.sgst,
+  });
+}
+
+function slabTotalsToReportFormat(slabTotals, grand, billCount, section = "sales") {
+  const isReturn = section === "returns";
+  return {
+    ...formatGstReportTotals({
+      bill_count: billCount,
+      sales_amount: isReturn ? 0 : slabTotals.net_amount,
+      return_amount: isReturn ? slabTotals.net_amount : 0,
+      net_amount: slabTotals.net_amount,
+      taxable_amount: slabTotals.taxable_amount,
+      total_tax: slabTotals.total_tax,
+      igst: slabTotals.igst,
+      cgst: slabTotals.cgst,
+      sgst: slabTotals.sgst,
+    }),
+    matches_invoice_totals:
+      round2(slabTotals.net_amount) === round2(grand.netAmount) &&
+      round2(slabTotals.total_tax) === round2(grand.totalTax),
+  };
+}
+
+export function buildDetailedSectionPayload(filters, rows, reportRowCount, invoiceCount, grand, slabTotals, section = "sales") {
+  return {
+    filters: formatGstReportFilters(filters),
+    rows,
+    report_rows: reportRowCount,
+    invoice_count: invoiceCount,
+    totals: grandToSectionReportTotals(grand, section),
+    slab_totals: slabTotalsToReportFormat(slabTotals, grand, invoiceCount, section),
+  };
+}
+
+function emptyDetailedSectionPayload(filters) {
+  const emptyGrand = { ...EMPTY_SUMMARY_GRAND };
+  return buildDetailedSectionPayload(filters, [], 0, 0, emptyGrand, aggregateSlabRowTotals([]), "returns");
 }

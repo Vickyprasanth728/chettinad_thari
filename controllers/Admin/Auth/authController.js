@@ -17,7 +17,7 @@ import {
   markResetTokenUsed,
   clearUserSessions,
 } from "../../../Utils/passwordResetHelper.js";
-import { sendPasswordResetEmail, getFrontendUrl } from "../../../Utils/mailService.js";
+import { sendPasswordResetEmail } from "../../../Utils/mailService.js";
 
 const CLIENT = process.env.CLIENT || "CHETTINAD";
 const MAX_ATTEMPTS = 5;
@@ -28,7 +28,7 @@ const INVALID_CREDENTIALS_MSG = "Invalid username or password";
 const DUMMY_PASSWORD_HASH =
   "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqJqF5Q5eO";
 
-const { isProduction, bcryptRounds } = validateEnv();
+const { isProduction, bcryptRounds, frontendUrl } = validateEnv();
 
 const FORGOT_PASSWORD_SUCCESS_MSG =
   "Password reset link has been sent to your registered email.";
@@ -361,7 +361,9 @@ export const forgotPassword = async (req, res) => {
     }
 
     const { rawToken } = await createPasswordResetToken(user.id);
-    const resetUrl = `${getFrontendUrl()}/admin/reset-password?token=${rawToken}`;
+        console.log('getFrontendUrl',frontendUrl);
+
+    const resetUrl = `${frontendUrl}/admin/reset-password?token=${rawToken}`;
     const mailResult = await sendPasswordResetEmail({
       to: user.email,
       name: user.name || user.username,

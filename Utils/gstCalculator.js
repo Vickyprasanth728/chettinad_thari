@@ -4,8 +4,14 @@ function round2(value) {
   return Number(Number(value).toFixed(2));
 }
 
+/**
+ * Product list/detail total_price:
+ * - retail_price is the selling price (discount is display-only: Before Discount − retail).
+ * - inclusive: GST already in retail_price → total_price = retail_price
+ * - exclusive: GST added on top → total_price = retail_price + GST
+ */
 export function computeProductTotalPrice(product) {
-  const unitPrice = round2(Number(product.retail_price ?? 0) - Number(product.discount ?? 0));
+  const unitPrice = round2(Number(product.retail_price ?? 0));
   if (!product.gst_id) return unitPrice;
 
   const gstType = String(product.gst_type ?? product.type ?? "exclusive").toLowerCase();
@@ -17,7 +23,7 @@ export function computeProductTotalPrice(product) {
 }
 
 export async function resolveProductTotalPrice(product) {
-  const unitPrice = round2(Number(product.retail_price ?? 0) - Number(product.discount ?? 0));
+  const unitPrice = round2(Number(product.retail_price ?? 0));
   if (!product.gst_id) return unitPrice;
 
   const hasGstMeta =

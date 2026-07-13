@@ -1,6 +1,29 @@
+import fs from "fs";
+import path from "path";
 import { formatPaymentMethodsList } from "./paymentMethodHelper.js";
 
 const BRAND_NAME = "CHETTINAD THARI";
+const LOGO_RELATIVE_PATH = path.join("uploads", "logo", "chettinad-thari-logo.png");
+
+/** Cached data-URI so every PDF render reuses one disk read. */
+let cachedLogoDataUri = undefined;
+
+function getLogoDataUri() {
+  if (cachedLogoDataUri !== undefined) return cachedLogoDataUri;
+  try {
+    const logoPath = path.join(process.cwd(), LOGO_RELATIVE_PATH);
+    if (!fs.existsSync(logoPath)) {
+      cachedLogoDataUri = "";
+      return cachedLogoDataUri;
+    }
+    const base64 = fs.readFileSync(logoPath).toString("base64");
+    cachedLogoDataUri = `data:image/png;base64,${base64}`;
+    return cachedLogoDataUri;
+  } catch {
+    cachedLogoDataUri = "";
+    return cachedLogoDataUri;
+  }
+}
 
 const BASE_STYLES = `
   * { box-sizing: border-box; }
@@ -14,8 +37,18 @@ const BASE_STYLES = `
   .header {
     text-align: center;
     border-bottom: 2px solid #8b1e1e;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
     margin-bottom: 16px;
+  }
+  .header .logo {
+    display: block;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #c9a227;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   }
   .brand {
     font-size: 20px;
@@ -84,12 +117,39 @@ const BASE_STYLES = `
   .invoice-meta span { display: inline-block; min-width: 140px; }
   .totals-box {
     margin-top: 12px;
+    margin-left: auto;
+    width: 320px;
     padding: 10px 12px;
     background: #f7f4f0;
     border: 1px solid #ddd;
-    line-height: 1.8;
   }
-  .grand-total { font-size: 13px; font-weight: 700; color: #8b1e1e; }
+  .totals-box .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    line-height: 1.8;
+    font-size: 11px;
+  }
+  .totals-box .row .label { color: #444; }
+  .totals-box .row .value { font-variant-numeric: tabular-nums; text-align: right; }
+  .totals-box .row.muted .label,
+  .totals-box .row.muted .value { color: #666; }
+  .totals-box .divider {
+    border: 0;
+    border-top: 1px solid #ccc;
+    margin: 6px 0;
+  }
+  .grand-total {
+    font-size: 13px;
+    font-weight: 700;
+    color: #8b1e1e;
+    margin-top: 2px;
+  }
+  table.data.invoice-lines th,
+  table.data.invoice-lines td {
+    padding: 6px 4px;
+    font-size: 9.5px;
+  }
   .signature-wrap {
     margin-top: 48px;
     display: flex;
@@ -131,13 +191,20 @@ const REPORT_CONFIG = {
   in_depth_report: {
     title: "In-Depth Sales Report",
     columns: [
-      { key: "id", label: "ID" },
+      { key: "s_no", label: "S.No", align: "center" },
       { key: "date", label: "Date", format: "date" },
       { key: "bill_no", label: "Bill No" },
-      { key: "items_billed", label: "Items Billed" },
-      { key: "payment_type", label: "Payment Type", format: "payment" },
+      { key: "product_name", label: "Product Name" },
       { key: "staff", label: "Staff" },
+      { key: "payment_type", label: "Payment Type" },
+      { key: "quantity", label: "Qty", align: "right" },
+      { key: "unit_price", label: "Unit Price", align: "right", format: "currency" },
+      { key: "discount", label: "Discount", align: "right", format: "currency" },
+      { key: "gst_rate", label: "GST %", align: "right" },
+      { key: "gst_amount", label: "GST Amount", align: "right", format: "currency" },
+      { key: "line_total", label: "Total Price", align: "right", format: "currency" },
     ],
+    totalKeys: ["gst_amount", "line_total"],
   },
   bill_details_report: {
     title: "Bill Details Report",
@@ -187,6 +254,19 @@ export function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Shared letterhead used by all PDF builders. */
+function buildPdfHeaderHtml(reportTitle) {
+  const logoUri = getLogoDataUri();
+  const logoHtml = logoUri
+    ? `<img class="logo" src="${logoUri}" alt="${escapeHtml(BRAND_NAME)}" />`
+    : "";
+  return `<div class="header">
+    ${logoHtml}
+    <p class="brand">${BRAND_NAME}</p>
+    <p class="report-title">${escapeHtml(reportTitle)}</p>
+  </div>`;
 }
 
 function formatColumnLabel(key) {
@@ -300,17 +380,16 @@ export function buildTabularReportHtml({
       .join("")}</tr></tfoot>`;
   }
 
+  const pageStyle = landscape ? `@page { size: A4 landscape; margin: 12mm; }` : "";
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <style>${BASE_STYLES}</style>
+  <style>${pageStyle}${BASE_STYLES}</style>
 </head>
 <body>
-  <div class="header">
-    <p class="brand">${BRAND_NAME}</p>
-    <p class="report-title">${escapeHtml(reportTitle)}</p>
-  </div>
+  ${buildPdfHeaderHtml(reportTitle)}
   ${buildMetaHtml(metaLines)}
   <table class="data">
     <thead>${headerRow}</thead>
@@ -351,7 +430,7 @@ export function buildAdminReportPdfHtml(reportKey, rows, options = {}) {
     columns: config.columns,
     totalKeys: config.totalKeys || [],
     metaLines,
-    landscape: options.landscape,
+    landscape: options.landscape ?? reportKey === "in_depth_report",
     includeFooterNote: reportKey !== "daily_report",
   });
 
@@ -368,18 +447,33 @@ export function buildAdminReportPdfHtml(reportKey, rows, options = {}) {
   return tableHtml.replace("</body>", `${signatureHtml}</body>`);
 }
 
+function money(value) {
+  return formatCellValue(value, "currency");
+}
+
+function totalsRow(label, value, className = "") {
+  return `<div class="row ${className}"><span class="label">${escapeHtml(label)}</span><span class="value">${money(value)}</span></div>`;
+}
+
 export function buildInvoicePdfHtml(bill, items, payments) {
   const itemRows = items
-    .map(
-      (i) =>
-        `<tr>
+    .map((i) => {
+      const qty = Number(i.quantity) || 0;
+      const unitPrice = Number(i.unit_price) || 0;
+      const gstAmount = Number(i.gst_amount) || 0;
+      const lineTotal = Number(i.line_total) || 0;
+      const amount = Math.round(qty * unitPrice * 100) / 100;
+
+      return `<tr>
           <td>${escapeHtml(i.product_name)}</td>
           <td>${escapeHtml(i.stock_no)}</td>
           <td class="text-center">${escapeHtml(i.quantity)}</td>
-          <td class="text-right">${formatCellValue(i.unit_price, "currency")}</td>
-          <td class="text-right">${formatCellValue(i.line_total, "currency")}</td>
-        </tr>`
-    )
+          <td class="text-right">${money(unitPrice)}</td>
+          <td class="text-right">${money(amount)}</td>
+          <td class="text-right">${money(gstAmount)}</td>
+          <td class="text-right">${money(lineTotal)}</td>
+        </tr>`;
+    })
     .join("");
 
   const payRows = payments
@@ -387,7 +481,7 @@ export function buildInvoicePdfHtml(bill, items, payments) {
       (p) =>
         `<tr>
           <td>${escapeHtml(p.payment_method)}</td>
-          <td class="text-right">${formatCellValue(p.amount, "currency")}</td>
+          <td class="text-right">${money(p.amount)}</td>
         </tr>`
     )
     .join("");
@@ -396,6 +490,34 @@ export function buildInvoicePdfHtml(bill, items, payments) {
     ? bill.createdon.toISOString().slice(0, 19).replace("T", " ")
     : String(bill.createdon || "");
 
+  const itemsAmount = Math.round(
+    items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0) * 100
+  ) / 100;
+  const discountTotal = Number(bill.discount) || 0;
+  const creditApplied = Number(bill.credit_applied) || 0;
+  const paidTotal = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const igst = Number(bill.igst) || 0;
+
+  const totalsHtml = [
+    totalsRow("Items Amount", itemsAmount),
+    discountTotal > 0 ? totalsRow("Less: Discount", discountTotal) : "",
+    `<hr class="divider" />`,
+    totalsRow("Taxable Value", bill.subtotal),
+    totalsRow("CGST", bill.cgst, "muted"),
+    totalsRow("SGST", bill.sgst, "muted"),
+    igst > 0 ? totalsRow("IGST", igst, "muted") : "",
+    totalsRow("GST Total", bill.gst_total),
+    `<hr class="divider" />`,
+    totalsRow("Grand Total", bill.total, "grand-total"),
+    creditApplied > 0 ? totalsRow("Credit Applied", creditApplied) : "",
+    creditApplied > 0
+      ? totalsRow("Amount Payable", Math.max(0, Number(bill.total) - creditApplied), "grand-total")
+      : "",
+    payments?.length ? totalsRow("Amount Paid", paidTotal) : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -403,10 +525,7 @@ export function buildInvoicePdfHtml(bill, items, payments) {
   <style>${BASE_STYLES}</style>
 </head>
 <body>
-  <div class="header">
-    <p class="brand">${BRAND_NAME}</p>
-    <p class="report-title">Tax Invoice</p>
-  </div>
+  ${buildPdfHeaderHtml("Tax Invoice")}
   <div class="invoice-meta">
     <p><span><strong>Bill No:</strong></span> ${escapeHtml(bill.bill_no)}</p>
     <p><span><strong>Date:</strong></span> ${escapeHtml(billDate)}</p>
@@ -416,24 +535,21 @@ export function buildInvoicePdfHtml(bill, items, payments) {
     <p><span><strong>Mobile:</strong></span> ${escapeHtml(bill.mobile || "—")} &nbsp;
        <strong>GSTIN:</strong> ${escapeHtml(bill.customer_gst || "—")}</p>
   </div>
-  <table class="data">
+  <table class="data invoice-lines">
     <thead>
       <tr>
-        <th>Product</th><th>Stock No</th><th class="text-center">Qty</th>
-        <th class="text-right">Unit Price</th><th class="text-right">Line Total</th>
+        <th>Product</th>
+        <th>Stock No</th>
+        <th class="text-center">Qty</th>
+        <th class="text-right">Unit Price</th>
+        <th class="text-right">Amount</th>
+        <th class="text-right">GST</th>
+        <th class="text-right">Total</th>
       </tr>
     </thead>
-    <tbody>${itemRows || `<tr><td colspan="5" class="empty">No line items</td></tr>`}</tbody>
+    <tbody>${itemRows || `<tr><td colspan="7" class="empty">No line items</td></tr>`}</tbody>
   </table>
-  <div class="totals-box">
-    <div>Subtotal: ${formatCellValue(bill.subtotal, "currency")}</div>
-    <div>GST: ${formatCellValue(bill.gst_total, "currency")} &nbsp;|&nbsp;
-         CGST: ${formatCellValue(bill.cgst, "currency")} &nbsp;|&nbsp;
-         SGST: ${formatCellValue(bill.sgst, "currency")}</div>
-    <div>Discount: ${formatCellValue(bill.discount, "currency")}</div>
-    <div class="grand-total">Grand Total: ${formatCellValue(bill.total, "currency")}</div>
-    <div>Credit Applied: ${formatCellValue(bill.credit_applied || 0, "currency")}</div>
-  </div>
+  <div class="totals-box">${totalsHtml}</div>
   <p class="report-title" style="margin-top:16px">Payments</p>
   <table class="data">
     <thead><tr><th>Method</th><th class="text-right">Amount</th></tr></thead>

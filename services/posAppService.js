@@ -4,6 +4,12 @@ import {
   calculateLineTax,
   summarizeTax,
   validateBillDraft,
+  resolveBillDiscount,
+  resolveCreditApplied,
+  applyBillDiscount,
+  normalizeBillingPayload,
+  buildPaymentMismatchDetail,
+  getLineNetAmounts,
 } from "../Utils/posTax.js";
 import {
   mapProductRow,
@@ -57,24 +63,33 @@ async function enrichItems(items) {
       unitPrice: Number(line.unitPrice ?? product.unitPrice),
       gstRate: gst.gstRate,
       gstType: gst.gstType,
-      discount: Number(line.discount || 0),
     });
   }
   return enriched;
 }
 
 export function buildBillQuote(payload, options = { isInterState: false }) {
-  const lines = (payload.items || []).map((line) => calculateLineTax(line, options));
-  const summary = summarizeTax(lines);
-  const withSummary = { ...payload, items: lines, summary };
+  const normalized = normalizeBillingPayload(payload);
+  const baseLines = (normalized.items || []).map((line) => calculateLineTax(line, options));
+  const lineSummary = summarizeTax(baseLines);
+  const { billDiscount } = resolveBillDiscount(normalized);
+  const { lines, summary: summaryBase } = applyBillDiscount(lineSummary, baseLines, billDiscount, options);
+  const { creditApplied } = resolveCreditApplied(normalized);
+  const summary = {
+    ...summaryBase,
+    creditApplied,
+    payableAmount: roundMoney(Math.max(0, summaryBase.grandTotal - creditApplied)),
+  };
+  const withSummary = { ...normalized, items: lines, summary };
   const validationErrors = validateBillDraft(withSummary);
-  return { lines, summary, validationErrors };
+  return { lines, summary, validationErrors, billDiscount: summary.billDiscount };
 }
 
 export async function quoteBilling(payload) {
-  const items = await enrichItems(payload.items);
-  const quote = buildBillQuote({ ...payload, items });
-  const stockCheck = await checkBillingStock(payload.items || []);
+  const normalized = normalizeBillingPayload(payload);
+  const items = await enrichItems(normalized.items);
+  const quote = buildBillQuote({ ...normalized, items });
+  const stockCheck = await checkBillingStock(normalized.items || []);
   return {
     ...quote,
     stockOk: stockCheck.ok,
@@ -224,13 +239,14 @@ async function resolveCustomer(customer) {
 }
 
 export async function checkoutBilling(payload, staffId) {
-  const quote = await quoteBilling(payload);
+  const normalized = normalizeBillingPayload(payload);
+  const quote = await quoteBilling(normalized);
   if (quote.validationErrors.length > 0) {
     return { ok: false, status: 422, code: "VALIDATION_FAILED", message: "Billing validation failed.", details: quote.validationErrors };
   }
 
-  const name = String(payload.customer?.name || "").trim();
-  const mobile = String(payload.customer?.mobile || "").trim();
+  const name = String(normalized.customer?.name || "").trim();
+  const mobile = String(normalized.customer?.mobile || "").trim();
   if (!name || !mobile) {
     return { ok: false, status: 422, code: "VALIDATION_FAILED", message: "Customer name and mobile are required.", details: [] };
   }
@@ -249,14 +265,31 @@ export async function checkoutBilling(payload, staffId) {
       }
     }
 
-    const customerId = await resolveCustomer(payload.customer);
+    const customerId = await resolveCustomer(normalized.customer);
     const billNo = await generateBillNumber();
-    const creditApplied = Number(payload.creditApplied || 0);
-    let grandTotal = quote.summary.grandTotal - creditApplied;
+    const creditApplied = Number(quote.summary.creditApplied || 0);
+    const billDiscount = Number(quote.summary.billDiscount || 0);
+    const discountTotal = Number(quote.summary.discountTotal || billDiscount);
+    const finalPayable = roundMoney(quote.summary.grandTotal - creditApplied);
 
-    const paymentTotal = (payload.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
-    if (payload.payments?.length && Math.abs(paymentTotal - grandTotal) > 0.01) {
-      throw new Error("Split payment total must match final payable amount.");
+    const paymentTotal = (normalized.payments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+    if (normalized.payments?.length && Math.abs(paymentTotal - finalPayable) > 0.01) {
+      await t.rollback();
+      return {
+        ok: false,
+        status: 422,
+        code: "VALIDATION_FAILED",
+        message: "Billing validation failed.",
+        details: [
+          buildPaymentMismatchDetail({
+            itemsTotal: quote.summary.itemsTotal,
+            billDiscount,
+            grandTotal: quote.summary.grandTotal,
+            creditApplied,
+            paymentTotal,
+          }),
+        ],
+      };
     }
 
     if (creditApplied > 0 && customerId) {
@@ -282,13 +315,13 @@ export async function checkoutBilling(payload, staffId) {
           billNo,
           customerId,
           staffId,
-          payload.orderNumber || null,
+          normalized.orderNumber || null,
           quote.summary.totalTaxableAmount,
-          quote.lines.reduce((s, l) => s + Number(l.discount || 0), 0),
+          discountTotal,
           quote.summary.totalGst,
           quote.summary.totalCgst,
           quote.summary.totalSgst,
-          grandTotal,
+          finalPayable,
           creditApplied,
         ],
         transaction: t,
@@ -296,6 +329,7 @@ export async function checkoutBilling(payload, staffId) {
     );
 
     for (const line of quote.lines) {
+      const net = getLineNetAmounts(line);
       const [[p]] = await db.query(
         `SELECT p.*, g.id AS gst_id FROM products p LEFT JOIN gst g ON g.id = p.gst_id WHERE p.id = ? FOR UPDATE`,
         { replacements: [line.productId], transaction: t }
@@ -310,12 +344,12 @@ export async function checkoutBilling(payload, staffId) {
             p.stock_no,
             line.qty,
             line.unitPrice,
-            line.discount,
+            line.billDiscountShare || 0,
             p.gst_id,
-            line.gstAmount,
-            line.cgst,
-            line.sgst,
-            line.lineTotal,
+            net.gstAmount,
+            net.cgst,
+            net.sgst,
+            net.lineTotal,
             staffId,
           ],
           transaction: t,
@@ -338,7 +372,7 @@ export async function checkoutBilling(payload, staffId) {
     }
 
     const paymentsOut = [];
-    for (const pay of payload.payments || []) {
+    for (const pay of normalized.payments || []) {
       await db.query(`INSERT INTO split_payments (bill_id, payment_method, amount) VALUES (?,?,?)`, {
         replacements: [billId, paymentModeToDb(pay.mode), pay.amount],
         transaction: t,
@@ -367,20 +401,23 @@ export async function checkoutBilling(payload, staffId) {
 
     const bill = {
       billNo,
-      billType: payload.billType || "POS",
+      billType: normalized.billType || "POS",
       billDateTime: new Date().toISOString(),
       staffId: String(staffId),
       customerId: customerId ? String(customerId) : null,
-      customerGst: payload.customer?.gstNumber
-        ? { gstin: payload.customer.gstNumber, name: payload.customer.name }
+      customerGst: normalized.customer?.gstNumber
+        ? { gstin: normalized.customer.gstNumber, name: normalized.customer.name }
         : null,
-      orderNumber: payload.orderNumber || null,
+      orderNumber: normalized.orderNumber || null,
       parentBillNo: null,
       items: quote.lines,
       summary: quote.summary,
-      discountTotal: quote.lines.reduce((s, l) => s + Number(l.discount || 0), 0),
+      billDiscount,
+      discountTotal,
       taxTotal: quote.summary.totalGst,
       grandTotal: quote.summary.grandTotal,
+      creditApplied,
+      payableAmount: finalPayable,
     };
 
     return { ok: true, status: 201, data: { bill, invoice: bill, payments: paymentsOut } };
@@ -555,7 +592,7 @@ function buildPartialLineFromTransaction(orig, qty) {
       unitPrice: Number(orig.unit_price),
       gstRate: Number(orig.gst_rate || 0),
       gstType: orig.gst_type || "exclusive",
-      discount: Number(orig.discount || 0) * ratio,
+      billDiscountShare: Number(orig.discount || 0) * ratio,
     }),
     productName: orig.product_name,
     parentTransactionId: String(orig.id),
@@ -609,6 +646,13 @@ export async function getBillByBillNo(billNo) {
     };
   });
 
+  const itemsTotal = roundMoney(mappedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0));
+  const storedDiscountTotal = Number(bill.discount || 0);
+  const billDiscount = roundMoney(storedDiscountTotal);
+  const creditApplied = Number(bill.credit_applied || 0);
+  const payableAmount = Number(bill.total || 0);
+  const grandTotalBeforeCredit = roundMoney(payableAmount + creditApplied);
+
   const billDto = {
     billNo: bill.bill_no,
     billType: "POS",
@@ -618,10 +662,19 @@ export async function getBillByBillNo(billNo) {
     orderNumber: bill.manual_order_number,
     parentBillNo: null,
     items: mappedItems,
-    summary: buildBillSummaryFromDb(bill),
-    discountTotal: Number(bill.discount || 0),
+    summary: {
+      ...buildBillSummaryFromDb(bill),
+      itemsTotal,
+      billDiscount,
+      discountTotal: roundMoney(storedDiscountTotal),
+      grandTotal: grandTotalBeforeCredit,
+    },
+    billDiscount,
+    discountTotal: roundMoney(storedDiscountTotal),
     taxTotal: Number(bill.gst_total || 0),
-    grandTotal: Number(bill.total || 0),
+    grandTotal: grandTotalBeforeCredit,
+    creditApplied,
+    payableAmount,
   };
 
   return {
@@ -764,7 +817,7 @@ export async function checkoutReturn(payload, staffId) {
             orig.stock_no,
             line.qty,
             line.unitPrice,
-            line.discount,
+            line.billDiscountShare || 0,
             line.gstAmount,
             line.cgst,
             line.sgst,
@@ -1272,34 +1325,34 @@ export async function searchProducts(query = "", options = {}) {
   const stockFilter = inStockOnly ? " AND p.quantity > 0" : "";
   const baseSql = posProductSelectSql();
 
+  // QR JSON: prefer exact stock_no; fall back to product id only when stock_number is absent.
   if (parsed.stockNo || parsed.productId) {
-    const clauses = [];
-    const params = [];
-    if (parsed.productId != null && parsed.productId !== "") {
-      clauses.push("p.id = ?");
-      params.push(Number(parsed.productId));
-    }
     if (parsed.stockNo) {
-      clauses.push("p.stock_no = ?");
-      params.push(String(parsed.stockNo).trim());
+      const [rows] = await db.query(
+        `${baseSql}${stockFilter} AND p.stock_no = ? ORDER BY p.product_name`,
+        { replacements: [String(parsed.stockNo).trim()] }
+      );
+      return rows.map(mapProductRow);
     }
-    if (!clauses.length) return [];
-    const [rows] = await db.query(
-      `${baseSql}${stockFilter} AND (${clauses.join(" OR ")}) ORDER BY p.product_name LIMIT 20`,
-      { replacements: params }
-    );
-    return rows.map(mapProductRow);
+    if (parsed.productId != null && parsed.productId !== "") {
+      const [rows] = await db.query(
+        `${baseSql}${stockFilter} AND p.id = ? ORDER BY p.product_name`,
+        { replacements: [Number(parsed.productId)] }
+      );
+      return rows.map(mapProductRow);
+    }
+    return [];
   }
 
+  // Plain text search matches stock_no only (not name / productId).
   const value = parsed.text;
   let sql = `${baseSql}${stockFilter}`;
   const params = [];
   if (value) {
-    sql += ` AND (LOWER(p.product_name) LIKE ? OR LOWER(p.stock_no) LIKE ? OR CAST(p.id AS CHAR) = ?)`;
-    const like = `%${value}%`;
-    params.push(like, like, value.replace(/^p/i, ""));
+    sql += ` AND LOWER(p.stock_no) LIKE ?`;
+    params.push(`%${value}%`);
   }
-  sql += ` ORDER BY p.product_name LIMIT 20`;
+  sql += ` ORDER BY p.product_name`;
   const [rows] = await db.query(sql, { replacements: params });
   return rows.map(mapProductRow);
 }

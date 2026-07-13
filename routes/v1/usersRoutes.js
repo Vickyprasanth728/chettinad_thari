@@ -2,6 +2,7 @@ import express from "express";
 import { VerifyToken, APIPermission } from "../../middleware/authmiddleware.js";
 import { PERMISSIONS } from "../../config/permissionConfig.js";
 import { requireRecordExists } from "../../middleware/requireRecordExists.js";
+import { validateAddUser, validateUpdateUser } from "../../middleware/validateUsers.js";
 import {
   AddUser, GetUsers, UpdateUser, DeleteUser,
   checkUsernameUnique, checkMobileUnique, checkEmailUnique, getStaffList,
@@ -13,10 +14,10 @@ const userRecord = requireRecordExists({
 });
 
 const router = express.Router();
-router.post("/", VerifyToken, APIPermission(PERMISSIONS.USER_CREATE.name), AddUser);
+router.post("/", VerifyToken, APIPermission(PERMISSIONS.USER_CREATE.name), validateAddUser, AddUser);
 router.get("/", VerifyToken, APIPermission(PERMISSIONS.USER_READ.name), GetUsers);
 router.get("/staff-list", VerifyToken, getStaffList);
-router.put("/:id", VerifyToken, APIPermission(PERMISSIONS.USER_UPDATE.name), userRecord, UpdateUser);
+router.put("/:id", VerifyToken, APIPermission(PERMISSIONS.USER_UPDATE.name), userRecord, validateUpdateUser, UpdateUser);
 router.delete("/:id", VerifyToken, APIPermission(PERMISSIONS.USER_DELETE.name), userRecord, DeleteUser);
 router.post("/username-unique", checkUsernameUnique);
 router.post("/mobile-unique", checkMobileUnique);

@@ -606,7 +606,9 @@ const collection = {
         request("Quote", "POST", "/billing/quote", {
           body: {
             billType: "POS",
-            items: [{ productId: "{{productId}}", qty: 1, unitPrice: 1500, gstRate: 5, discount: 0 }],
+            billDiscount: 0,
+            items: [{ productId: "{{productId}}", qty: 1, unitPrice: 1500, gstRate: 5 }],
+            creditApplied: 0,
             payments: [],
           },
         }),
@@ -619,7 +621,7 @@ const collection = {
             staffId: "{{userId}}",
             orderNumber: "ORD-PM-001",
             customer: { name: "Test Customer", mobile: "9876543210", email: "", gstNumber: "" },
-            items: [{ productId: "{{productId}}", qty: 1, unitPrice: 1500, gstRate: 5, discount: 0 }],
+            items: [{ productId: "{{productId}}", qty: 1, unitPrice: 1500, gstRate: 5 }],
             payments: [{ mode: "CASH", amount: 1500 }],
           },
           test: POS_SAVE_BILL_NO,
@@ -692,7 +694,7 @@ const collection = {
             staff_id: "{{userId}}",
             manual_order_number: "ORD-PM-001",
             customer: { name: "Walk-in Customer", mobile: "9999999999", email: "", gst_number: "" },
-            items: [{ product_id: "{{productId}}", quantity: 1, unit_price: 500, discount: 0 }],
+            items: [{ product_id: "{{productId}}", quantity: 1, unit_price: 500 }],
             bill_discount: 0,
             credit_to_apply: 0,
             payments: [

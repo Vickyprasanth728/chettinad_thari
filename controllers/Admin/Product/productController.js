@@ -10,7 +10,7 @@ import { hasCrudId, getCrudId, sqlReplacements } from "../../../Utils/crudQuery.
 import { buildLikeSearch, parseReportPagination } from "../../../Utils/listQuery.js";
 import { appendStockNoRangeWhere } from "../../../Utils/stockNoRange.js";
 import { logInventoryChange } from "../../../Utils/inventoryHelper.js";
-import { validateProductCategoryId } from "../Category/categoryController.js";
+import { validateProductCategoryId, resolveBulkCategoryPairOrError } from "../Category/categoryController.js";
 import {
   attachPrimaryImagesToProducts,
   attachImagesToProductDetail,
@@ -19,6 +19,10 @@ import {
 } from "../../../Utils/productImageHelper.js";
 import { resolveProductTotalPrice, attachTotalPrice, attachTotalPriceToProducts } from "../../../Utils/gstCalculator.js";
 import { getRecordIds, deleteSuccessMessage, deleteSuccessPayload } from "../../../Utils/bulkDelete.js";
+import {
+  validateProductPricingFields,
+  validateDiscountAgainstPrice,
+} from "../../../Utils/productValidation.js";
 
 const uploadDir = path.join(process.cwd(), "uploads", "bulk");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -32,15 +36,19 @@ if (!fs.existsSync(productImageTmpDir)) fs.mkdirSync(productImageTmpDir, { recur
 const BULK_UPLOAD_HEADERS = [
   "Stock No",
   "Item Description",
-  "Retail Price",
-  "Discount",
-  "GST %",
-  "Quantity",
-  "Low Stock Threshold",
-  "Vendor",
-  "HSN",
+  "Vendor Code",
   "Design Code",
+  "HSN Code",
+  "Retail Price",
+  "Before Discount",
+  "GST",
+  "Base UOM",
+  "Closing Bal.Qty",
+  "Category",
+  "Sub Category",
 ];
+
+const BULK_DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
 const VIEW_STATUS_FILTERS = {
   instock: " AND p.quantity > 0",
@@ -71,14 +79,16 @@ function bulkRowToArray(row) {
   return [
     row["Stock No"] ?? row.stock_no ?? "",
     row["Item Description"] ?? row.product_name ?? "",
-    row["Retail Price"] ?? row.retail_price ?? "",
-    row.Discount ?? row.discount ?? "",
-    row["GST %"] ?? row.gst ?? "",
-    row.Quantity ?? row.quantity ?? "",
-    row["Low Stock Threshold"] ?? row.low_stock_threshold ?? row.lowStockThreshold ?? "",
-    row.Vendor ?? row.vendor ?? "",
-    row.HSN ?? row.hsn_code ?? row.hsn ?? "",
+    row["Vendor Code"] ?? row.vendor_code ?? row.Vendor ?? row.vendor ?? "",
     row["Design Code"] ?? row.design_code ?? row.design ?? "",
+    row["HSN Code"] ?? row.HSN ?? row.hsn_code ?? row.hsn ?? "",
+    row["Retail Price"] ?? row.retail_price ?? "",
+    row["Before Discount"] ?? row.before_discount ?? row.Discount ?? row.discount ?? "",
+    row.GST ?? row["GST %"] ?? row.gst ?? "",
+    row["Base UOM"] ?? row.base_uom ?? "",
+    row["Closing Bal.Qty"] ?? row.closing_bal_qty ?? row.Quantity ?? row.quantity ?? "",
+    row.Category ?? row.category ?? "",
+    row["Sub Category"] ?? row.sub_category ?? "",
   ];
 }
 
@@ -119,14 +129,16 @@ function getBulkRowValue(row, ...keys) {
 const BULK_MANDATORY_FIELDS = [
   { label: "Stock No", keys: ["Stock No", "stock_no"] },
   { label: "Item Description", keys: ["Item Description", "product_name"] },
-  { label: "Retail Price", keys: ["Retail Price", "retail_price"] },
-  { label: "Discount", keys: ["Discount", "discount"] },
-  { label: "GST %", keys: ["GST %", "gst"] },
-  { label: "Quantity", keys: ["Quantity", "quantity"] },
-  { label: "Low Stock Threshold", keys: ["Low Stock Threshold", "low_stock_threshold", "lowStockThreshold"] },
-  { label: "Vendor", keys: ["Vendor", "vendor"] },
-  { label: "HSN", keys: ["HSN", "hsn_code", "hsn"] },
+  { label: "Vendor Code", keys: ["Vendor Code", "vendor_code", "Vendor", "vendor"] },
   { label: "Design Code", keys: ["Design Code", "design_code", "design"] },
+  { label: "HSN Code", keys: ["HSN Code", "HSN", "hsn_code", "hsn"] },
+  { label: "Retail Price", keys: ["Retail Price", "retail_price"] },
+  { label: "Before Discount", keys: ["Before Discount", "before_discount", "Discount", "discount"] },
+  { label: "GST", keys: ["GST", "GST %", "gst"] },
+  { label: "Base UOM", keys: ["Base UOM", "base_uom"] },
+  { label: "Closing Bal.Qty", keys: ["Closing Bal.Qty", "closing_bal_qty", "Quantity", "quantity"] },
+  { label: "Category", keys: ["Category", "category"] },
+  { label: "Sub Category", keys: ["Sub Category", "sub_category"] },
 ];
 
 function collectBulkMandatoryErrors(row) {
@@ -147,13 +159,22 @@ function formatBulkRowErrors(errors) {
   return [...new Set(errors.filter(Boolean))].join("; ");
 }
 
+function parseBulkGstPercent(gstRaw) {
+  const normalized = String(gstRaw).trim().replace(/%$/, "").trim();
+  const tax = Number(normalized);
+  if (!Number.isFinite(tax)) {
+    return { error: `Invalid GST: ${gstRaw}` };
+  }
+  return { value: tax };
+}
+
 async function resolveBulkVendorIdOrError(vendorValue) {
   const trimmed = String(vendorValue).trim();
   const [[vendor]] = await db.query(
     `SELECT id FROM vendors WHERE status != 0 AND (vendor_code = ? OR vendor_name = ?) LIMIT 1`,
     { replacements: [trimmed, trimmed] }
   );
-  if (!vendor) return { error: `Vendor not found: ${trimmed}` };
+  if (!vendor) return { error: `Vendor Code not found: ${trimmed}` };
   return { id: vendor.id };
 }
 
@@ -163,21 +184,39 @@ async function resolveBulkDesignIdOrError(designCode) {
     `SELECT id FROM design_master WHERE design_code = ? AND status != 0 LIMIT 1`,
     { replacements: [trimmed] }
   );
-  if (!design) return { error: `Design code not found: ${trimmed}` };
+  if (!design) return { error: `Design Code not found: ${trimmed}` };
   return { id: design.id };
 }
 
-async function resolveBulkGstIdOrError(gstPct) {
-  const tax = Number(gstPct);
-  if (!Number.isFinite(tax)) {
-    return { error: `Invalid GST %: ${gstPct}` };
-  }
+async function resolveBulkGstIdOrError(gstRaw) {
+  const parsed = parseBulkGstPercent(gstRaw);
+  if (parsed.error) return { error: parsed.error };
+
+  const tax = parsed.value;
   const [[gst]] = await db.query(
     `SELECT id FROM gst WHERE tax = ? AND status != 0 LIMIT 1`,
     { replacements: [tax] }
   );
   if (!gst) return { error: `GST rate not found: ${tax}%` };
   return { id: gst.id };
+}
+
+function collectBulkPositiveValueErrors(parsedNumbers) {
+  const errors = [];
+  const retailPrice = parsedNumbers["Retail Price"];
+  const beforeDiscount = parsedNumbers["Before Discount"];
+  const quantity = parsedNumbers["Closing Bal.Qty"];
+
+  if (retailPrice !== undefined && retailPrice <= 0) {
+    errors.push("Retail Price must be greater than zero");
+  }
+  if (beforeDiscount !== undefined && beforeDiscount <= 0) {
+    errors.push("Before Discount must be greater than zero");
+  }
+  if (quantity !== undefined && quantity <= 0) {
+    errors.push("Closing Bal.Qty must be greater than zero");
+  }
+  return errors;
 }
 
 async function validateBulkUploadRow(row, { seenStockNos, seenProductNames }) {
@@ -210,11 +249,13 @@ async function validateBulkUploadRow(row, { seenStockNos, seenProductNames }) {
 
   const numericFields = [
     { value: getBulkRowValue(row, "Retail Price", "retail_price"), label: "Retail Price" },
-    { value: getBulkRowValue(row, "Discount", "discount"), label: "Discount" },
-    { value: getBulkRowValue(row, "Quantity", "quantity"), label: "Quantity", integer: true },
     {
-      value: getBulkRowValue(row, "Low Stock Threshold", "low_stock_threshold", "lowStockThreshold"),
-      label: "Low Stock Threshold",
+      value: getBulkRowValue(row, "Before Discount", "before_discount", "Discount", "discount"),
+      label: "Before Discount",
+    },
+    {
+      value: getBulkRowValue(row, "Closing Bal.Qty", "closing_bal_qty", "Quantity", "quantity"),
+      label: "Closing Bal.Qty",
       integer: true,
     },
   ];
@@ -227,13 +268,19 @@ async function validateBulkUploadRow(row, { seenStockNos, seenProductNames }) {
     else parsedNumbers[field.label] = parsed.value;
   }
 
-  const vendorRaw = getBulkRowValue(row, "Vendor", "vendor");
+  errors.push(...collectBulkPositiveValueErrors(parsedNumbers));
+
+  const vendorRaw = getBulkRowValue(row, "Vendor Code", "vendor_code", "Vendor", "vendor");
   const designRaw = getBulkRowValue(row, "Design Code", "design_code", "design");
-  const gstRaw = getBulkRowValue(row, "GST %", "gst");
+  const gstRaw = getBulkRowValue(row, "GST", "GST %", "gst");
+  const uomRaw = getBulkRowValue(row, "Base UOM", "base_uom");
+  const categoryRaw = getBulkRowValue(row, "Category", "category");
+  const subCategoryRaw = getBulkRowValue(row, "Sub Category", "sub_category");
 
   let vendorId;
   let designId;
   let gstId;
+  let categoryId;
 
   if (!isBlankExcelValue(vendorRaw)) {
     const vendorResult = await resolveBulkVendorIdOrError(vendorRaw);
@@ -253,9 +300,26 @@ async function validateBulkUploadRow(row, { seenStockNos, seenProductNames }) {
     else gstId = gstResult.id;
   }
 
+  const baseUom = isBlankExcelValue(uomRaw) ? "" : String(uomRaw).trim();
+
+  if (!isBlankExcelValue(categoryRaw) || !isBlankExcelValue(subCategoryRaw)) {
+    const categoryResult = await resolveBulkCategoryPairOrError(categoryRaw, subCategoryRaw);
+    if (categoryResult.error) errors.push(categoryResult.error);
+    else categoryId = categoryResult.categoryId;
+  }
+
   const uniqueErrors = [...new Set(errors)];
   if (uniqueErrors.length) {
     return { errors: uniqueErrors, data: null };
+  }
+
+  const retailPrice = parsedNumbers["Retail Price"];
+  const beforeDiscount = parsedNumbers["Before Discount"];
+  const discount = Math.round((beforeDiscount - retailPrice) * 100) / 100;
+
+  const discountError = validateDiscountAgainstPrice(discount, retailPrice);
+  if (discountError) {
+    return { errors: ["Discount cannot exceed Retail Price"], data: null };
   }
 
   return {
@@ -263,14 +327,16 @@ async function validateBulkUploadRow(row, { seenStockNos, seenProductNames }) {
     data: {
       stockNo,
       trimmedName: desc,
-      price: parsedNumbers["Retail Price"],
-      discount: parsedNumbers.Discount,
-      qty: parsedNumbers.Quantity,
-      lowThreshold: Math.max(0, parsedNumbers["Low Stock Threshold"]),
+      price: retailPrice,
+      discount,
+      qty: parsedNumbers["Closing Bal.Qty"],
+      lowThreshold: BULK_DEFAULT_LOW_STOCK_THRESHOLD,
       gstId,
       vendorId,
       designId,
-      hsnCode: String(getBulkRowValue(row, "HSN", "hsn_code", "hsn")).trim(),
+      categoryId,
+      baseUom,
+      hsnCode: String(getBulkRowValue(row, "HSN Code", "HSN", "hsn_code", "hsn")).trim(),
     },
   };
 }
@@ -329,17 +395,18 @@ export const addProduct = async (req, res) => {
 
     if (!stock_no?.trim()) return sendError(res, "stock_no is required");
     if (!product_name?.trim()) return sendError(res, "product_name is required");
-    if (retail_price === undefined || retail_price === null || retail_price === "") {
-      return sendError(res, "retail_price is required");
-    }
     if (quantity === undefined || quantity === null || quantity === "") {
       return sendError(res, "quantity is required");
     }
 
-    const threshold =
-      low_stock_threshold != null && low_stock_threshold !== ""
-        ? Math.max(0, parseInt(low_stock_threshold, 10) || 0)
-        : 5;
+    const pricing = validateProductPricingFields(
+      { retail_price, discount, low_stock_threshold },
+      { mode: "create" }
+    );
+    if (!pricing.ok) return sendError(res, pricing.errors[0]);
+
+    const { retail_price: validatedPrice, discount: validatedDiscount, low_stock_threshold: threshold } =
+      pricing.values;
 
     const catCheck = await validateProductCategoryId(category_id);
     if (!catCheck.ok) return sendError(res, catCheck.message);
@@ -351,8 +418,8 @@ export const addProduct = async (req, res) => {
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       {
         replacements: [
-          stock_no.trim(), trimmedName, description ?? null, quantity || 0, threshold, retail_price,
-          discount ?? 0, gst_id || null, hsn_code || null, vendor_id || null, design_id || null,
+          stock_no.trim(), trimmedName, description ?? null, quantity || 0, threshold, validatedPrice,
+          validatedDiscount, gst_id || null, hsn_code || null, vendor_id || null, design_id || null,
           catCheck.categoryId, published,
         ],
       }
@@ -612,6 +679,39 @@ export const updateProduct = async (req, res) => {
       quantityUpdate = newQty;
     }
 
+    const pricingFieldsTouched =
+      req.body.retail_price !== undefined ||
+      req.body.discount !== undefined ||
+      req.body.low_stock_threshold !== undefined;
+
+    let currentRetailPrice;
+    let currentDiscount;
+    if (pricingFieldsTouched && (req.body.retail_price === undefined || req.body.discount === undefined)) {
+      const [[current]] = await db.query(
+        `SELECT retail_price, discount FROM products WHERE id = ?`,
+        { replacements: [productId] }
+      );
+      currentRetailPrice = Number(current?.retail_price);
+      currentDiscount = Number(current?.discount ?? 0);
+    }
+
+    if (pricingFieldsTouched) {
+      const pricing = validateProductPricingFields(req.body, {
+        mode: "update",
+        currentRetailPrice,
+        currentDiscount,
+      });
+      if (!pricing.ok) return sendError(res, pricing.errors[0]);
+      Object.assign(req.body, pricing.values);
+      // Optional: blank low_stock_threshold must not overwrite with null/empty
+      if (
+        req.body.low_stock_threshold !== undefined &&
+        !Object.prototype.hasOwnProperty.call(pricing.values, "low_stock_threshold")
+      ) {
+        delete req.body.low_stock_threshold;
+      }
+    }
+
     const fields = [
       "stock_no", "product_name", "description", "retail_price", "discount",
       "gst_id", "hsn_code", "vendor_id", "design_id", "category_id", "published", "status",
@@ -621,12 +721,8 @@ export const updateProduct = async (req, res) => {
     const params = [];
     for (const f of fields) {
       if (req.body[f] !== undefined) {
-        let val = req.body[f];
-        if (f === "low_stock_threshold") {
-          val = Math.max(0, parseInt(val, 10) || 0);
-        }
         updates.push(`${f} = ?`);
-        params.push(val);
+        params.push(req.body[f]);
       }
     }
     if (quantityUpdate !== null) {
@@ -982,15 +1078,18 @@ export const bulkUpload = async (req, res) => {
           gstId,
           vendorId,
           designId,
+          categoryId,
+          baseUom,
           hsnCode,
         } = data;
 
         const [pid] = await db.query(
-          `INSERT INTO products (stock_no, product_name, quantity, low_stock_threshold, retail_price, discount, gst_id, vendor_id, design_id, hsn_code, published)
-           VALUES (?,?,?,?,?,?,?,?,?,?,1)`,
+          `INSERT INTO products (stock_no, product_name, quantity, low_stock_threshold, retail_price, discount, gst_id, vendor_id, design_id, hsn_code, category_id, base_uom, published)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`,
           {
             replacements: [
               stockNo, trimmedName, qty, lowThreshold, price, discount, gstId, vendorId, designId, hsnCode,
+              categoryId, baseUom,
             ],
           }
         );
@@ -1043,9 +1142,9 @@ export const bulkUpload = async (req, res) => {
 export const downloadBulkTemplate = async (req, res) => {
   const ws = xlsx.utils.aoa_to_sheet([
     BULK_UPLOAD_HEADERS,
-    ["STK-BULK-001", "Kanchipuram Silk Saree", 4500, 0, 5, 12, 5, "A1", "5007", "DES-001"],
-    ["STK-BULK-002", "Chettinad Cotton Saree", 1800, 100, 5, 25, 5, "A1", "5208", "DES-001"],
-    ["STK-BULK-003", "Temple Border Silk Saree", 6200, 0, 12, 8, 3, "A1", "5007", "DES-001"],
+    ["PK003918", "Narayanpet", "PK", "9999", "5208", 1500, 1800, "5.00%", "Each", 2, "PK", "9999"],
+    ["PK003919", "Kanchipuram Silk", "PK", "9999", "5007", 4500, 5000, "12.00%", "Each", 5, "PK", "9999"],
+    ["PK003920", "Chettinad Cotton", "PK", "9999", "5208", 1800, 2000, "5.00%", "Each", 10, "PK", "9999"],
   ]);
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, "Products");

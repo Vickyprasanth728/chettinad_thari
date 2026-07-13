@@ -57,15 +57,21 @@ async function main() {
     (p) => Number(p.stockQty) >= 1 && Number(p.stockQty) <= Number(p.lowStockThreshold ?? 5)
   );
 
-  // PS tests
-  const ps01 = await req("GET", "/products/search?q=saree", { token });
+  // PS tests — q matches stockNo only
+  const stockHint = (inStock?.stockNo || products[0]?.stockNo || "CT").slice(0, 3);
+  const ps01 = await req("GET", `/products/search?q=${encodeURIComponent(stockHint)}`, { token });
+  const ps01Data = ps01.json?.data || [];
   record(
     "PS-01",
     ps01.status === 200 &&
       ps01.json?.success &&
-      Array.isArray(ps01.json.data) &&
-      (ps01.json.data.length === 0 || ps01.json.data[0].stockStatus != null),
-    `items=${ps01.json?.data?.length}`
+      Array.isArray(ps01Data) &&
+      typeof ps01.json?.count === "number" &&
+      ps01.json.count === ps01Data.length &&
+      (ps01Data.length === 0 ||
+        (ps01Data[0].stockStatus != null &&
+          ps01Data.every((p) => String(p.stockNo || "").toLowerCase().includes(stockHint.toLowerCase())))),
+    `q=${stockHint} count=${ps01.json?.count} items=${ps01Data.length}`
   );
 
   if (inStock?.stockNo) {
@@ -86,16 +92,18 @@ async function main() {
   record("PS-07", ps07ok, `items=${ps07.json?.data?.length}`);
 
   if (oos) {
-    const ps08 = await req("GET", `/products/search?q=${encodeURIComponent(oos.stockNo || oos.name)}`, { token });
+    const ps08 = await req("GET", `/products/search?q=${encodeURIComponent(oos.stockNo)}`, { token });
     const found = (ps08.json?.data || []).find((p) => p.productId === oos.productId);
     record(
       "PS-08",
-      found?.stockStatus === "out_of_stock" && Number(found?.stockQty) < 1,
+      Boolean(oos.stockNo) &&
+        found?.stockStatus === "out_of_stock" &&
+        Number(found?.stockQty) < 1,
       `productId=${oos.productId}`
     );
     const ps09 = await req(
       "GET",
-      `/products/search?q=${encodeURIComponent(oos.stockNo || oos.name)}&in_stock_only=true`,
+      `/products/search?q=${encodeURIComponent(oos.stockNo)}&in_stock_only=true`,
       { token }
     );
     const hidden = !(ps09.json?.data || []).some((p) => p.productId === oos.productId);

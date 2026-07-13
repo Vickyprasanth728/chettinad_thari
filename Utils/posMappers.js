@@ -25,6 +25,7 @@ export function paymentModeFromDb(mode) {
 }
 
 import { computeStockStatus, getDefaultLowStockThreshold } from "./posStock.js";
+import { calculateLineTax } from "./posTax.js";
 
 export function mapProductRow(row) {
   const gstId = row.gst_id != null ? Number(row.gst_id) : null;
@@ -70,6 +71,16 @@ export function mapBillPayments(rows) {
 }
 
 export function mapTransactionLine(t, gstRate = 0, gstType = "exclusive") {
+  const billDiscountShare = Number(t.discount || 0);
+  const base = calculateLineTax({
+    productId: String(t.product_id),
+    qty: Number(t.quantity),
+    unitPrice: Number(t.unit_price),
+    gstRate: Number(gstRate),
+    gstType: String(gstType || "exclusive").toLowerCase(),
+    billDiscountShare: 0,
+  });
+
   return {
     transactionId: String(t.id),
     productId: String(t.product_id),
@@ -77,14 +88,14 @@ export function mapTransactionLine(t, gstRate = 0, gstType = "exclusive") {
     unitPrice: Number(t.unit_price),
     gstRate: Number(gstRate),
     gstType: String(gstType || "exclusive").toLowerCase(),
-    discount: Number(t.discount || 0),
-    grossAmount: Number(t.unit_price) * Number(t.quantity),
-    taxableAmount: Number(t.unit_price) * Number(t.quantity) - Number(t.discount || 0),
-    gstAmount: Number(t.gst_amount || 0),
-    cgst: Number(t.cgst || 0),
-    sgst: Number(t.sgst || 0),
-    igst: 0,
-    lineTotal: Number(t.line_total),
+    billDiscountShare,
+    grossAmount: base.grossAmount,
+    taxableAmount: base.taxableAmount,
+    gstAmount: base.gstAmount,
+    cgst: base.cgst,
+    sgst: base.sgst,
+    igst: base.igst,
+    lineTotal: base.lineTotal,
     productName: t.product_name,
   };
 }

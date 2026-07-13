@@ -135,7 +135,7 @@ export const assertUniqueFields = async (db, data, config, excludeId = null) => 
 
     const [rows] = await db.query(sql, { replacements: params });
     if (rows.length) {
-      const label = field.name.replace(/_/g, " ");
+      const label = field.label || field.name.replace(/_/g, " ");
       throw new Error(`${label} already exists`);
     }
   }

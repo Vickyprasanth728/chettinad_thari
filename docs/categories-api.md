@@ -24,7 +24,7 @@ Base: `http://localhost:8080/api/v1/categories`
 | GET | `/categories/:id` | `category:read` | Get by id |
 | POST | `/categories` | `category:create` | Create |
 | PUT | `/categories/:id` | `category:update` | Update |
-| DELETE | `/categories/:id` | `category:delete` | Soft delete |
+| DELETE | `/categories/:id` | `category:delete` | Hard delete (row removed) |
 | GET | `/categories/dropdown` | `category:read` | Dropdown list |
 | POST | `/categories/check-unique-name` | `category:read` | Name uniqueness check |
 
