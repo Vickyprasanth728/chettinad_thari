@@ -16,15 +16,14 @@ const buildVendorProducts = (rows) => {
         products: [],
       });
     }
-    if (row.id != null) {
-      byVendor.get(row.vendor_id).products.push({
-        id: row.id,
-        stock_no: row.stock_no,
-        product_name: row.product_name,
-        quantity: Number(row.quantity) || 0,
-        retail_price: row.retail_price,
-      });
-    }
+    const qty = Number(row.quantity) || 0;
+    if (row.design_code == null && qty === 0) continue;
+
+    byVendor.get(row.vendor_id).products.push({
+      design_code: row.design_code ?? null,
+      quantity: qty,
+      retail_price: row.retail_price,
+    });
   }
   return [...byVendor.values()];
 };
@@ -60,12 +59,15 @@ export const getDashboardSummary = async (req, res) => {
     );
 
     const [vendorProductRows] = await db.query(
-      `SELECT v.id AS vendor_id, v.vendor_name,
-              p.id, p.stock_no, p.product_name, p.quantity, p.retail_price
+      `SELECT v.id AS vendor_id, v.vendor_name, d.design_code,
+              COALESCE(SUM(p.quantity), 0) AS quantity,
+              COALESCE(SUM(p.quantity * p.retail_price), 0) AS retail_price
        FROM vendors v
        LEFT JOIN products p ON p.vendor_id = v.id AND p.status = 1
+       LEFT JOIN design_master d ON d.id = p.design_id
        WHERE v.status = 1
-       ORDER BY p.product_name ASC`
+       GROUP BY v.id, v.vendor_name, d.design_code
+       ORDER BY d.design_code ASC`
     );
     const vendorOrder = new Map(vendorStock.map((v, i) => [v.id, i]));
     const vendorProducts = buildVendorProducts(vendorProductRows).sort(
